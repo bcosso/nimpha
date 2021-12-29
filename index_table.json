@@ -1,0 +1,4 @@
+{
+"index_id": 1,
+"index_row": [{"index_from": 1, "index_to": 100, "instance_name": "traira", "instance_ip": "127.0.0.1", "instance_port": "10000", "table_name": "table1" }]
+}

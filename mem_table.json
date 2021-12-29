@@ -1,0 +1,8 @@
+{
+"path": "C:\\Bruno\\TestFolder\\",
+"peers": [{"name": "traira", "ip": "127.0.0.1"}, {"name": "velho_bicha", "ip": "127.0.0.1"}], 
+"number_replicas": "1",
+"max_heap_size": "40",
+"instance_name": "traira",
+"instance_port": "10000"
+}
