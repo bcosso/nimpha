@@ -52,6 +52,7 @@ type mem_table struct {
 
 type mem_row struct {
 	key_id   int `json:"key_id"`
+	table_name string `json:"table_name"`
 	document string `json:"document"`
 }
 
@@ -77,19 +78,20 @@ func get_rows(w http.ResponseWriter, r *http.Request){
 	vars := mux.Vars(r)
 	key := vars["id"]
 	operation := vars["op"]
+	table_from := vars["table_from"]
 	i, err := strconv.Atoi(key)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	get_rows_op(i, operation)
+	get_rows_op(i, operation, table_from)
 	
 }
 
-func get_rows_op(key int, operation string){
+func get_rows_op(key int, operation string, table_from string){
 	switch (operation){
 		case "eq":
-			get_rows_equals_to(key)
+			get_rows_equals_to(key, table_from)
 			break
 		case "gt":
 			get_rows_greater_than(key)
@@ -100,7 +102,7 @@ func get_rows_op(key int, operation string){
 	}
 }
 
-func get_rows_equals_to(key int) []mem_row {
+func get_rows_equals_to(key int, table_from string) []mem_row {
 
 		//get which node I am
 		//check range for the current node
@@ -108,7 +110,7 @@ func get_rows_equals_to(key int) []mem_row {
 
 		var result []mem_row
 		for _, node := range it.index_rows {
-			if node.index_to <= key && node.index_from >= key {
+			if node.table_name == table_from && node.index_to <= key && node.index_from >= key {
 				result = append(get_slices(key, key, node)) 
 				//make it async and combine the results later 
 			}
@@ -147,7 +149,7 @@ func get_rows_smaller_than(key int) []mem_row{
 func get_slices(from int, to int, ir index_row) []mem_row{
 	//if (len(mt.rows) > 
 	var rows []mem_row
-	response, err := http.Get("http://" + ir.instance_ip + "/" + ir.instance_name + "/get_slices_worker?from="+ strconv.Itoa(from) + "&to=" + strconv.Itoa(to))
+	response, err := http.Get("http://" + ir.instance_ip + "/" + ir.instance_name + "/get_slices_worker?from="+ strconv.Itoa(from) + "&to=" + strconv.Itoa(to) + "&table_from=" + ir.table_name)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -229,6 +231,7 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) []mem_row{
 	vars := mux.Vars(r)
 	fromStr := vars["from"]
 	toStr := vars["to"]
+	table_from := vars["table_from"]
 	from, err := strconv.Atoi(fromStr)
 	if err != nil {
 		log.Fatal(err)
@@ -261,11 +264,11 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) []mem_row{
 	}else{
 		real_index_from = 0
 		real_index_to = len(mt.rows) - 1
-		searchInMemTableFrom(&real_index_from, &real_index_to, &fromLocal)
+		searchInMemTableFrom(&real_index_from, &real_index_to, &fromLocal, table_from)
 		var temp_real_index_from int
 		temp_real_index_from = real_index_from
 		real_index_to = len(mt.rows) - 1
-		searchInMemTableTo(&temp_real_index_from, &real_index_to, &toLocal)
+		searchInMemTableTo(&temp_real_index_from, &real_index_to, &toLocal, table_from)
 	}
 		
 
@@ -273,34 +276,34 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) []mem_row{
 	return mt.rows[real_index_from:real_index_to]
 }
 
-func searchInMemTableFrom(real_index_from *int, real_index_to *int, key_id_from *int){
+func searchInMemTableFrom(real_index_from *int, real_index_to *int, key_id_from *int, table_from string){
 	// + or -1
 	var current_real_index_from int;
 	if (mt.rows[*real_index_from].key_id!=*key_id_from){
 		
 		current_real_index_from = (*real_index_from + *real_index_to)/2
-		if (mt.rows[current_real_index_from].key_id>*key_id_from){
+		if (mt.rows[current_real_index_from].key_id>*key_id_from && mt.rows[current_real_index_from].table_name == table_from){
 			*real_index_to = current_real_index_from
-			searchInMemTableFrom(real_index_from, real_index_to, key_id_from)
-		}else if (mt.rows[current_real_index_from].key_id<*key_id_from){
+			searchInMemTableFrom(real_index_from, real_index_to, key_id_from, table_from)
+		}else if (mt.rows[current_real_index_from].key_id<*key_id_from  && mt.rows[current_real_index_from].table_name == table_from){
 			*real_index_from = current_real_index_from
-			searchInMemTableFrom(real_index_from, real_index_to, key_id_from)
+			searchInMemTableFrom(real_index_from, real_index_to, key_id_from, table_from)
 		}
 	}
 }
 
-func searchInMemTableTo(real_index_from *int, real_index_to *int, key_id_to *int){
+func searchInMemTableTo(real_index_from *int, real_index_to *int, key_id_to *int, table_from string){
 	// + or -1
 	var current_real_index_from int;
 	if (mt.rows[*real_index_to].key_id!=*key_id_to){
 		
 		current_real_index_from = (*real_index_from + *real_index_to)/2
-		if (mt.rows[current_real_index_from].key_id>*key_id_to){
+		if (mt.rows[current_real_index_from].key_id>*key_id_to && mt.rows[current_real_index_from].table_name == table_from){
 			*real_index_to = current_real_index_from
-			searchInMemTableTo(real_index_from, real_index_to, key_id_to)
-		}else if (mt.rows[current_real_index_from].key_id<*key_id_to){
+			searchInMemTableTo(real_index_from, real_index_to, key_id_to, table_from)
+		}else if (mt.rows[current_real_index_from].key_id<*key_id_to && mt.rows[current_real_index_from].table_name == table_from ){
 			*real_index_from = current_real_index_from
-			searchInMemTableTo(real_index_from, real_index_to, key_id_to)
+			searchInMemTableTo(real_index_from, real_index_to, key_id_to, table_from)
 		}
 	}
 }
