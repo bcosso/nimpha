@@ -20,7 +20,7 @@ type config struct {
 	Peers   peers `json:"peers"`
 	Number_Replicas string `json:"number_replicas"`
 	Max_Heap_Size string `json:"max_heap_size"`
-	Instance_Name string `json:"instance_name"`
+	Instance_name string `json:"instance_name"`
 	Instance_Port string `json:"instance_port"`
 }
 
@@ -31,29 +31,29 @@ type peers struct {
 
 
 type index_table struct {
-	index_id   int `json:"index_id"`
-	index_rows   []index_row `json:"index_row"`
+	Index_id   int `json:"index_id"`
+	Index_rows   []index_row `json:"index_row"`
 }
 
 
 type index_row struct {
-	index_from   int `json:"index_from"`
-	index_to   int `json:"index_to"`
-	instance_name   string `json:"instance_name"`
-	instance_ip   string `json:"instance_ip"`
-	instance_port string `json:"instance_port"`
-	table_name string `json:"table_name"`
+	Index_from   int `json:"index_from"`
+	Index_to   int `json:"index_to"`
+	Instance_name   string `json:"instance_name"`
+	Instance_ip   string `json:"instance_ip"`
+	Instance_port string `json:"instance_port"`
+	Table_name string `json:"table_name"`
 }
 
 type mem_table struct {
-	key_id   int `json:"key_id"`
-	rows []mem_row `json:"mem_row"`
+	Key_id   int `json:"key_id"`
+	Rows []mem_row `json:"mem_row"`
 }
 
 type mem_row struct {
-	key_id   int `json:"key_id"`
-	table_name string `json:"table_name"`
-	document string `json:"document"`
+	Key_id   int `json:"key_id"`
+	Table_name string `json:"table_name"`
+	Document string `json:"document"`
 }
 
 var it index_table =  get_index_table()
@@ -109,8 +109,8 @@ func get_rows_equals_to(key int, table_from string) []mem_row {
 		//chech it if this node can satisfy	this clause		
 
 		var result []mem_row
-		for _, node := range it.index_rows {
-			if node.table_name == table_from && node.index_to <= key && node.index_from >= key {
+		for _, node := range it.Index_rows {
+			if node.Table_name == table_from && node.Index_to <= key && node.Index_from >= key {
 				result = append(get_slices(key, key, node)) 
 				//make it async and combine the results later 
 			}
@@ -121,12 +121,12 @@ func get_rows_equals_to(key int, table_from string) []mem_row {
 
 func get_rows_greater_than(key int) []mem_row{
 	var result []mem_row
-		for _, node := range it.index_rows {
-			if node.index_to >= key && node.index_from <= key {
-				result = append(get_slices(key, node.index_to, node)) 
+		for _, node := range it.Index_rows {
+			if node.Index_to >= key && node.Index_from <= key {
+				result = append(get_slices(key, node.Index_to, node)) 
 				//make it async and combine the results later 
-			}else if node.index_from >= key {
-				result = append(get_slices(node.index_from, node.index_to, node))
+			}else if node.Index_from >= key {
+				result = append(get_slices(node.Index_from, node.Index_to, node))
 			}
 		}
 		return result;
@@ -134,12 +134,12 @@ func get_rows_greater_than(key int) []mem_row{
 
 func get_rows_smaller_than(key int) []mem_row{
 	var result []mem_row
-	for _, node := range it.index_rows {
-		if node.index_to >= key && node.index_from <= key {
-			result = append(get_slices(node.index_from, key, node)) 
+	for _, node := range it.Index_rows {
+		if node.Index_to >= key && node.Index_from <= key {
+			result = append(get_slices(node.Index_from, key, node)) 
 			//make it async and combine the results later 
-		}else if node.index_to <= key {
-			result = append(get_slices(node.index_from, node.index_to, node))
+		}else if node.Index_to <= key {
+			result = append(get_slices(node.Index_from, node.Index_to, node))
 		}
 	}
 	return result;
@@ -149,7 +149,7 @@ func get_rows_smaller_than(key int) []mem_row{
 func get_slices(from int, to int, ir index_row) []mem_row{
 	//if (len(mt.rows) > 
 	var rows []mem_row
-	response, err := http.Get("http://" + ir.instance_ip + "/" + ir.instance_name + "/get_slices_worker?from="+ strconv.Itoa(from) + "&to=" + strconv.Itoa(to) + "&table_from=" + ir.table_name)
+	response, err := http.Get("http://" + ir.Instance_ip + "/" + ir.Instance_name + "/get_slices_worker?from="+ strconv.Itoa(from) + "&to=" + strconv.Itoa(to) + "&table_from=" + ir.Table_name)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -225,13 +225,21 @@ func get_slices(from int, to int, ir index_row) []mem_row{
 	return rows
 }
 
-func get_slices_worker(w http.ResponseWriter, r *http.Request) []mem_row{
+func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 	
 	
-	vars := mux.Vars(r)
-	fromStr := vars["from"]
-	toStr := vars["to"]
-	table_from := vars["table_from"]
+	//vars := mux.Vars(r)
+	
+	//fmt.Println(vars)
+
+	fromStr := r.URL.Query().Get("from")
+
+	fmt.Println(" FROM: " + fromStr)
+
+	toStr := r.URL.Query().Get("to")
+	fmt.Println(" TO: " + toStr)
+	table_from := r.URL.Query().Get("table_from")
+
 	from, err := strconv.Atoi(fromStr)
 	if err != nil {
 		log.Fatal(err)
@@ -248,62 +256,67 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) []mem_row{
 	// }
 
 
-	var real_index_from int
-	var real_index_to int
-	// var local_index_from int
-	// var local_index_to int
+	var real_Index_from int
+	var real_Index_to int
+	// var local_Index_from int
+	// var local_Index_to int
+	fmt.Println("MemoryTable:::::::")
+	fmt.Println(mt)
+	fmt.Println("Pointer:::::::")
+	fmt.Println(&mt)
 
-	fromLocal := mt.rows[0].key_id
-	toLocal := mt.rows[len(mt.rows) - 1].key_id
+	fromLocal := mt.Rows[0].Key_id
+	toLocal := mt.Rows[len(mt.Rows) - 1].Key_id
 
 
 
 	if (fromLocal <= from && to  >= toLocal ){
-		real_index_from = 0
-		real_index_to = len(mt.rows) - 1
+		real_Index_from = 0
+		real_Index_to = len(mt.Rows) - 1
 	}else{
-		real_index_from = 0
-		real_index_to = len(mt.rows) - 1
-		searchInMemTableFrom(&real_index_from, &real_index_to, &fromLocal, table_from)
-		var temp_real_index_from int
-		temp_real_index_from = real_index_from
-		real_index_to = len(mt.rows) - 1
-		searchInMemTableTo(&temp_real_index_from, &real_index_to, &toLocal, table_from)
+		real_Index_from = 0
+		real_Index_to = len(mt.Rows) - 1
+		searchInMemTableFrom(&real_Index_from, &real_Index_to, &fromLocal, table_from)
+		var temp_real_Index_from int
+		temp_real_Index_from = real_Index_from
+		real_Index_to = len(mt.Rows) - 1
+		searchInMemTableTo(&temp_real_Index_from, &real_Index_to, &toLocal, table_from)
 	}
 		
 
-	//rows = mt.rows[from:to]
-	return mt.rows[real_index_from:real_index_to]
+	rows_result := mt.Rows[real_Index_from:real_Index_to]
+	json_rows_bytes, _ := json.Marshal(rows_result)
+	fmt.Fprintf(w, string(json_rows_bytes))
 }
 
-func searchInMemTableFrom(real_index_from *int, real_index_to *int, key_id_from *int, table_from string){
+func searchInMemTableFrom(real_Index_from *int, real_Index_to *int, Key_id_from *int, table_from string){
 	// + or -1
-	var current_real_index_from int;
-	if (mt.rows[*real_index_from].key_id!=*key_id_from){
+	var current_real_Index_from int;
+	if (mt.Rows[*real_Index_from].Key_id!=*Key_id_from){
 		
-		current_real_index_from = (*real_index_from + *real_index_to)/2
-		if (mt.rows[current_real_index_from].key_id>*key_id_from && mt.rows[current_real_index_from].table_name == table_from){
-			*real_index_to = current_real_index_from
-			searchInMemTableFrom(real_index_from, real_index_to, key_id_from, table_from)
-		}else if (mt.rows[current_real_index_from].key_id<*key_id_from  && mt.rows[current_real_index_from].table_name == table_from){
-			*real_index_from = current_real_index_from
-			searchInMemTableFrom(real_index_from, real_index_to, key_id_from, table_from)
+		current_real_Index_from = (*real_Index_from + *real_Index_to)/2
+		if (mt.Rows[current_real_Index_from].Key_id>*Key_id_from && mt.Rows[current_real_Index_from].Table_name == table_from){
+			*real_Index_to = current_real_Index_from
+			searchInMemTableFrom(real_Index_from, real_Index_to, Key_id_from, table_from)
+		}else if (mt.Rows[current_real_Index_from].Key_id<*Key_id_from  && mt.Rows[current_real_Index_from].Table_name == table_from){
+			*real_Index_from = current_real_Index_from
+			searchInMemTableFrom(real_Index_from, real_Index_to, Key_id_from, table_from)
 		}
 	}
 }
 
-func searchInMemTableTo(real_index_from *int, real_index_to *int, key_id_to *int, table_from string){
+func searchInMemTableTo(real_Index_from *int, real_Index_to *int, Key_id_to *int, table_from string){
 	// + or -1
-	var current_real_index_from int;
-	if (mt.rows[*real_index_to].key_id!=*key_id_to){
+	var current_real_Index_from int;
+	if (mt.Rows[*real_Index_to].Key_id!=*Key_id_to){
 		
-		current_real_index_from = (*real_index_from + *real_index_to)/2
-		if (mt.rows[current_real_index_from].key_id>*key_id_to && mt.rows[current_real_index_from].table_name == table_from){
-			*real_index_to = current_real_index_from
-			searchInMemTableTo(real_index_from, real_index_to, key_id_to, table_from)
-		}else if (mt.rows[current_real_index_from].key_id<*key_id_to && mt.rows[current_real_index_from].table_name == table_from ){
-			*real_index_from = current_real_index_from
-			searchInMemTableTo(real_index_from, real_index_to, key_id_to, table_from)
+		current_real_Index_from = (*real_Index_from + *real_Index_to)/2
+		if (mt.Rows[current_real_Index_from].Key_id>*Key_id_to && mt.Rows[current_real_Index_from].Table_name == table_from){
+			*real_Index_to = current_real_Index_from
+			searchInMemTableTo(real_Index_from, real_Index_to, Key_id_to, table_from)
+		}else if (mt.Rows[current_real_Index_from].Key_id<*Key_id_to && mt.Rows[current_real_Index_from].Table_name == table_from ){
+			*real_Index_from = current_real_Index_from
+			searchInMemTableTo(real_Index_from, real_Index_to, Key_id_to, table_from)
 		}
 	}
 }
@@ -311,11 +324,14 @@ func searchInMemTableTo(real_index_from *int, real_index_to *int, key_id_to *int
 func handleRequests(configs *config ) {
 
 	myRouter := mux.NewRouter().StrictSlash(true)
-	//myRouter.HandleFunc("/"+ configs.Instance_Name + "/", homePage)
-	myRouter.HandleFunc("/"+ configs.Instance_Name + "/get_all", get_all)
-	myRouter.HandleFunc("/"+ configs.Instance_Name + "/get_rows", get_rows)
+	//myRouter.HandleFunc("/"+ configs.Instance_name + "/", homePage)
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_all", get_all)
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_rows", get_rows)
 
-	myRouter.HandleFunc("/"+ configs.Instance_Name + "/update_index_manager", update_index_manager)
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_slices_worker", get_slices_worker)
+	
+
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/update_index_manager", update_index_manager)
 
 
 	log.Fatal(http.ListenAndServe(":"+ configs.Instance_Port, myRouter))
@@ -351,8 +367,17 @@ func get_index_table() index_table{
 	defer configfile.Close()
 	root, err := ioutil.ReadAll(configfile)
 	var _it index_table
-	json.Unmarshal(root, &_it)
-
+	_it.Index_rows = make([]index_row, 0)
+	if err := json.Unmarshal([]byte(string(root)), &_it) ; err != nil {
+        log.Fatal(err)
+    }
+	
+	fmt.Println("IndexTable:::::::get_index_table")
+	fmt.Println(_it)
+	fmt.Println("Pointer:::::::get_index_table")
+	fmt.Println(&_it)
+	fmt.Println("JSON:::::::get_index_table")
+	fmt.Println(string(root))
 	return _it;
 }
 
@@ -364,7 +389,17 @@ func get_mem_table(){
 	}
 	defer configfile.Close()
 	root, err := ioutil.ReadAll(configfile)
-	json.Unmarshal(root, &mt)
+	err = json.Unmarshal(root, &mt)
+	if err!= nil{
+		log.Fatal(err)
+	}
+
+	fmt.Println("MemoryTable:::::::get_mem_table")
+	fmt.Println(mt)
+	fmt.Println("Pointer:::::::get_mem_table")
+	fmt.Println(&mt)
+	fmt.Println("JSON:::::::get_mem_table")
+	fmt.Println(root)
 }
 
 func check_index_manager(){}
