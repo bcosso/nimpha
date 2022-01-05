@@ -1,8 +1,10 @@
 {
-"path": "C:\\Bruno\\TestFolder\\",
-"peers": [{"name": "traira", "ip": "127.0.0.1"}, {"name": "velho_bicha", "ip": "127.0.0.1"}], 
-"number_replicas": "1",
-"max_heap_size": "40",
-"instance_name": "traira",
-"instance_port": "10000"
+"key_id": 1, "mem_row": [
+{"key_id": 1, "table_name": "table1","document": "teste1"},
+{"key_id": 2, "table_name": "table1","document": "teste2"},
+{"key_id": 3, "table_name": "table1","document": "teste3"},
+{"key_id": 4, "table_name": "table1","document": "teste4"},
+{"key_id": 5, "table_name": "table1","document": "teste5"},
+{"key_id": 6, "table_name": "table1","document": "teste6"}
+]
 }
