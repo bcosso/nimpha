@@ -268,7 +268,12 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 	fromLocal := mt.Rows[0].Key_id
 	toLocal := mt.Rows[len(mt.Rows) - 1].Key_id
 
+	fmt.Println("IndexFrom:::::::")
+	fmt.Println(fromLocal)
+	fmt.Println("IndexTo:::::::")
+	fmt.Println(toLocal)
 
+	
 
 	if (fromLocal <= from && to  >= toLocal ){
 		real_Index_from = 0
@@ -282,7 +287,11 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 		real_Index_to = len(mt.Rows) - 1
 		searchInMemTableTo(&temp_real_Index_from, &real_Index_to, &toLocal, table_from)
 	}
-		
+	
+	fmt.Println("IndexFromResult:::::::")
+	fmt.Println(real_Index_from)
+	fmt.Println("IndexToResult:::::::")
+	fmt.Println(real_Index_to)
 
 	rows_result := mt.Rows[real_Index_from:real_Index_to]
 	json_rows_bytes, _ := json.Marshal(rows_result)
