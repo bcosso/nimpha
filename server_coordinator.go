@@ -286,7 +286,7 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 	// }else{
 		real_Index_from = 0
 		real_Index_to = len(mt.Rows) - 1
-		searchInMemTableFrom(&real_Index_from, &real_Index_to, &fromLocal, table_from, &result_from)
+		searchInMemTable(&real_Index_from, &real_Index_to, &fromLocal, table_from, &result_from)
 
 		fmt.Println("IntermediateIndexFromResult:::::::")
 		fmt.Println(result_from)
@@ -295,7 +295,7 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 		var temp_real_Index_from int
 		temp_real_Index_from = real_Index_from
 		real_Index_to = len(mt.Rows) - 1
-		searchInMemTableTo(&temp_real_Index_from, &real_Index_to, &toLocal, table_from, &result_to)
+		searchInMemTable(&temp_real_Index_from, &real_Index_to, &toLocal, table_from, &result_to)
 	// }
 	
 	fmt.Println("IndexFromResult:::::::")
@@ -308,7 +308,7 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(json_rows_bytes))
 }
 
-func searchInMemTableFrom(real_Index_from *int, real_Index_to *int, Key_id_from *int, table_from string, result_from *int){
+func searchInMemTable(real_Index_from *int, real_Index_to *int, Key_id_from *int, table_from string, result_from *int){
 	// + or -1
 	var current_real_Index_from int;
 	if (mt.Rows[*real_Index_from].Key_id!=*Key_id_from || mt.Rows[*real_Index_from].Table_name != table_from){
@@ -317,17 +317,17 @@ func searchInMemTableFrom(real_Index_from *int, real_Index_to *int, Key_id_from 
 		current_real_Index_from = int(math.Round(binRound))
 		fmt.Println("current_real_Index_from:::::::BinarySearch")
 		fmt.Println(current_real_Index_from)
+		fmt.Println(*result_from)
+		*result_from = current_real_Index_from
 		
 			if (mt.Rows[current_real_Index_from].Key_id>*Key_id_from && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_to != current_real_Index_from){
 				*real_Index_to = current_real_Index_from
-				*result_from = *real_Index_to
-				searchInMemTableFrom(real_Index_from, real_Index_to, Key_id_from, table_from, result_from)
+				searchInMemTable(real_Index_from, real_Index_to, Key_id_from, table_from, result_from)
 				fmt.Println("WayBack:::::::BinarySearch::::real_Index_to")
 				fmt.Println(*real_Index_to)
 			}else if (mt.Rows[current_real_Index_from].Key_id<*Key_id_from  && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_from != current_real_Index_from){
 				*real_Index_from = current_real_Index_from
-				*result_from = *real_Index_from
-				searchInMemTableFrom(real_Index_from, real_Index_to, Key_id_from, table_from, result_from)
+				searchInMemTable(real_Index_from, real_Index_to, Key_id_from, table_from, result_from)
 				fmt.Println("WayBack:::::::BinarySearch:::real_Index_from")
 				fmt.Println(*real_Index_from)
 			}
@@ -335,27 +335,26 @@ func searchInMemTableFrom(real_Index_from *int, real_Index_to *int, Key_id_from 
 	}
 }
 
-func searchInMemTableTo(real_Index_from *int, real_Index_to *int, Key_id_to *int, table_from string, result_to *int ){
-	// + or -1
-	var current_real_Index_from int;
-	if (mt.Rows[*real_Index_to].Key_id!=*Key_id_to || mt.Rows[*real_Index_to].Table_name == table_from){
+// func searchInMemTableTo(real_Index_from *int, real_Index_to *int, Key_id_to *int, table_from string, result_to *int ){
+// 	// + or -1
+// 	var current_real_Index_from int;
+// 	if (mt.Rows[*real_Index_to].Key_id!=*Key_id_to || mt.Rows[*real_Index_to].Table_name == table_from){
 		
-		var binRound float64 = (float64(*real_Index_from) + float64(*real_Index_to))/2.0
-		current_real_Index_from = int(math.Round(binRound))
-		fmt.Println("current_real_Index_to:::::::BinarySearch")
-		fmt.Println(current_real_Index_from)
+// 		var binRound float64 = (float64(*real_Index_from) + float64(*real_Index_to))/2.0
+// 		current_real_Index_from = int(math.Round(binRound))
+// 		fmt.Println("current_real_Index_to:::::::BinarySearch")
+// 		fmt.Println(current_real_Index_from)
+// 		*result_to = current_real_Index_from
 
-		if (mt.Rows[current_real_Index_from].Key_id>*Key_id_to && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_to != current_real_Index_from){
-			*real_Index_to = current_real_Index_from
-			*result_to = *real_Index_to
-			searchInMemTableTo(real_Index_from, real_Index_to, Key_id_to, table_from, result_to)
-		}else if (mt.Rows[current_real_Index_from].Key_id<*Key_id_to && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_from != current_real_Index_from){
-			*real_Index_from = current_real_Index_from
-			*result_to = *real_Index_to
-			searchInMemTableTo(real_Index_from, real_Index_to, Key_id_to, table_from, result_to)
-		}
-	}
-}
+// 		if (mt.Rows[current_real_Index_from].Key_id>*Key_id_to && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_to != current_real_Index_from){
+// 			*real_Index_to = current_real_Index_from
+// 			searchInMemTableTo(real_Index_from, real_Index_to, Key_id_to, table_from, result_to)
+// 		}else if (mt.Rows[current_real_Index_from].Key_id<*Key_id_to && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_from != current_real_Index_from){
+// 			*real_Index_from = current_real_Index_from
+// 			searchInMemTableTo(real_Index_from, real_Index_to, Key_id_to, table_from, result_to)
+// 		}
+// 	}
+// }
 
 func handleRequests(configs *config ) {
 
