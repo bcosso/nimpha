@@ -4,7 +4,6 @@ import (
     "fmt"
 	"log"
 	// "errors"	
-	"math"
 	"os"
 	"io/ioutil"
 	"encoding/json"
@@ -89,6 +88,40 @@ func get_rows(w http.ResponseWriter, r *http.Request){
 	
 }
 
+
+func get_range(w http.ResponseWriter, r *http.Request){
+	fromStr := r.URL.Query().Get("from")
+
+	fmt.Println(" FROM: " + fromStr)
+
+	toStr := r.URL.Query().Get("to")
+	fmt.Println(" TO: " + toStr)
+	table_from := r.URL.Query().Get("table_from")
+
+	from, err := strconv.Atoi(fromStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	to, err := strconv.Atoi(toStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	var result []mem_row
+	for _, node := range it.Index_rows {
+		if node.Table_name == table_from && 
+		((node.Index_to >= to && to >= node.Index_from) ||  (node.Index_to >= from && from >= node.Index_from)) {
+			from_method := get_slices(from, to, node)
+			result = append(result, from_method...) 
+			//make it async and combine the results later 
+		}
+	}
+	json_rows_bytes, _ := json.Marshal(result)
+	fmt.Fprintf(w, string(json_rows_bytes))
+
+
+}
+
 func get_rows_op(key int, operation string, table_from string){
 	switch (operation){
 		case "eq":
@@ -105,32 +138,32 @@ func get_rows_op(key int, operation string, table_from string){
 
 func get_rows_equals_to(key int, table_from string) []mem_row {
 
-		//get which node I am
-		//check range for the current node
-		//chech it if this node can satisfy	this clause		
+	//get which node I am
+	//check range for the current node
+	//chech it if this node can satisfy	this clause		
 
-		var result []mem_row
-		for _, node := range it.Index_rows {
-			if node.Table_name == table_from && node.Index_to <= key && node.Index_from >= key {
-				result = append(get_slices(key, key, node)) 
-				//make it async and combine the results later 
-			}
+	var result []mem_row
+	for _, node := range it.Index_rows {
+		if node.Table_name == table_from && node.Index_to <= key && node.Index_from >= key {
+			result = append(get_slices(key, key, node)) 
+			//make it async and combine the results later 
 		}
-		return result;
+	}
+	return result;
 
 }
 
 func get_rows_greater_than(key int) []mem_row{
 	var result []mem_row
-		for _, node := range it.Index_rows {
-			if node.Index_to >= key && node.Index_from <= key {
-				result = append(get_slices(key, node.Index_to, node)) 
-				//make it async and combine the results later 
-			}else if node.Index_from >= key {
-				result = append(get_slices(node.Index_from, node.Index_to, node))
-			}
+	for _, node := range it.Index_rows {
+		if node.Index_to >= key && node.Index_from <= key {
+			result = append(get_slices(key, node.Index_to, node)) 
+			//make it async and combine the results later 
+		}else if node.Index_from >= key {
+			result = append(get_slices(node.Index_from, node.Index_to, node))
 		}
-		return result;
+	}
+	return result;
 }
 
 func get_rows_smaller_than(key int) []mem_row{
@@ -150,7 +183,7 @@ func get_rows_smaller_than(key int) []mem_row{
 func get_slices(from int, to int, ir index_row) []mem_row{
 	//if (len(mt.rows) > 
 	var rows []mem_row
-	response, err := http.Get("http://" + ir.Instance_ip + "/" + ir.Instance_name + "/get_slices_worker?from="+ strconv.Itoa(from) + "&to=" + strconv.Itoa(to) + "&table_from=" + ir.Table_name)
+	response, err := http.Get("http://" +  ir.Instance_ip + ":" + ir.Instance_port + "/" + ir.Instance_name +  "/get_slices_worker?from="+ strconv.Itoa(from) + "&to=" + strconv.Itoa(to) + "&table_from=" + ir.Table_name)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -162,76 +195,13 @@ func get_slices(from int, to int, ir index_row) []mem_row{
     err = dec.Decode(&rows)
     if err != nil {
 		log.Fatal(err)
-        // var syntaxError *json.SyntaxError
-        // var unmarshalTypeError *json.UnmarshalTypeError
-
-        // switch {
-        // // Catch any syntax errors in the JSON and send an error message
-        // // which interpolates the location of the problem to make it
-        // // easier for the client to fix.
-        // case errors.As(err, &syntaxError):
-        //     msg := fmt.Sprintf("Request body contains badly-formed JSON (at position %d)", syntaxError.Offset)
-        //     http.Error(w, msg, http.StatusBadRequest)
-
-        // // In some circumstances Decode() may also return an
-        // // io.ErrUnexpectedEOF error for syntax errors in the JSON. There
-        // // is an open issue regarding this at
-        // // https://github.com/golang/go/issues/25956.
-        // case errors.Is(err, io.ErrUnexpectedEOF):
-        //     msg := fmt.Sprintf("Request body contains badly-formed JSON")
-        //     http.Error(w, msg, http.StatusBadRequest)
-
-        // // Catch any type errors, like trying to assign a string in the
-        // // JSON request body to a int field in our Person struct. We can
-        // // interpolate the relevant field name and position into the error
-        // // message to make it easier for the client to fix.
-        // case errors.As(err, &unmarshalTypeError):
-        //     msg := fmt.Sprintf("Request body contains an invalid value for the %q field (at position %d)", unmarshalTypeError.Field, unmarshalTypeError.Offset)
-        //     http.Error(w, msg, http.StatusBadRequest)
-
-        // // Catch the error caused by extra unexpected fields in the request
-        // // body. We extract the field name from the error message and
-        // // interpolate it in our custom error message. There is an open
-        // // issue at https://github.com/golang/go/issues/29035 regarding
-        // // turning this into a sentinel error.
-        // case strings.HasPrefix(err.Error(), "json: unknown field "):
-        //     fieldName := strings.TrimPrefix(err.Error(), "json: unknown field ")
-        //     msg := fmt.Sprintf("Request body contains unknown field %s", fieldName)
-        //     http.Error(w, msg, http.StatusBadRequest)
-
-        // // An io.EOF error is returned by Decode() if the request body is
-        // // empty.
-        // case errors.Is(err, io.EOF):
-        //     msg := "Request body must not be empty"
-        //     http.Error(w, msg, http.StatusBadRequest)
-
-        // // Catch the error caused by the request body being too large. Again
-        // // there is an open issue regarding turning this into a sentinel
-        // // error at https://github.com/golang/go/issues/30715.
-        // case err.Error() == "http: request body too large":
-        //     msg := "Request body must not be larger than 1MB"
-        //     http.Error(w, msg, http.StatusRequestEntityTooLarge)
-
-        // // Otherwise default to logging the error and sending a 500 Internal
-        // // Server Error response.
-        // default:
-        //     log.Println(err.Error())
-        //     http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-        // }
-        
     }
-
-
 
 	return rows
 }
 
 func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 	
-	
-	//vars := mux.Vars(r)
-	
-	//fmt.Println(vars)
 
 	fromStr := r.URL.Query().Get("from")
 
@@ -250,111 +220,24 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	//compare first and last to from and to. Check the range. If it's high perform binary search (one alternative).
-	//var rows []mem_row
-	// if (len(mt.rows)+ baseRow < to){
-	// 	to = 
-	// }
+	var rows_result []mem_row
+	for _, row := range mt.Rows {
+		if row.Key_id >= from && row.Key_id <= to && row.Table_name == table_from{
+			rows_result = append(rows_result, row)
+		}  
+	}
 
-
-	var real_Index_from int
-	var real_Index_to int
-	var result_from int
-
-	var result_to int
-
-	// var local_Index_from int
-	// var local_Index_to int
-	fmt.Println("MemoryTable:::::::")
-	fmt.Println(mt)
-	fmt.Println("Pointer:::::::")
-	fmt.Println(&mt)
-
-	fromLocal := from
-	toLocal := to
-
-	fmt.Println("IndexFrom:::::::")
-	fmt.Println(fromLocal)
-	fmt.Println("IndexTo:::::::")
-	fmt.Println(toLocal)
-
-	
-
-	// if (fromLocal <= from && to  >= toLocal ){
-	// 	real_Index_from = 0
-	// 	real_Index_to = len(mt.Rows) - 1
-	// }else{
-		real_Index_from = 0
-		real_Index_to = len(mt.Rows) - 1
-		searchInMemTable(&real_Index_from, &real_Index_to, &fromLocal, table_from, &result_from)
-
-		fmt.Println("IntermediateIndexFromResult:::::::")
-		fmt.Println(result_from)
-		
-		
-		var temp_real_Index_from int
-		temp_real_Index_from = real_Index_from
-		real_Index_to = len(mt.Rows) - 1
-		searchInMemTable(&temp_real_Index_from, &real_Index_to, &toLocal, table_from, &result_to)
-	// }
-	
-	fmt.Println("IndexFromResult:::::::")
-	fmt.Println(real_Index_from)
-	fmt.Println("IndexToResult:::::::")
-	fmt.Println(real_Index_to)
-
-	rows_result := mt.Rows[result_from:result_to]
 	json_rows_bytes, _ := json.Marshal(rows_result)
 	fmt.Fprintf(w, string(json_rows_bytes))
 }
 
-func searchInMemTable(real_Index_from *int, real_Index_to *int, Key_id_from *int, table_from string, result_from *int){
-	// + or -1
-	var current_real_Index_from int;
-	if (mt.Rows[*real_Index_from].Key_id!=*Key_id_from || mt.Rows[*real_Index_from].Table_name != table_from){
-		
-		var binRound float64 = (float64(*real_Index_from) + float64(*real_Index_to))/2.0
-		current_real_Index_from = int(math.Round(binRound))
-		fmt.Println("current_real_Index_from:::::::BinarySearch")
-		fmt.Println(current_real_Index_from)
-		fmt.Println(*result_from)
-		*result_from = current_real_Index_from
-		
-			if (mt.Rows[current_real_Index_from].Key_id>*Key_id_from && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_to != current_real_Index_from){
-				*real_Index_to = current_real_Index_from
-				searchInMemTable(real_Index_from, real_Index_to, Key_id_from, table_from, result_from)
-				fmt.Println("WayBack:::::::BinarySearch::::real_Index_to")
-				fmt.Println(*real_Index_to)
-			}else if (mt.Rows[current_real_Index_from].Key_id<*Key_id_from  && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_from != current_real_Index_from){
-				*real_Index_from = current_real_Index_from
-				searchInMemTable(real_Index_from, real_Index_to, Key_id_from, table_from, result_from)
-				fmt.Println("WayBack:::::::BinarySearch:::real_Index_from")
-				fmt.Println(*real_Index_from)
-			}
-		
-	}
+
+func load_mem_table(w http.ResponseWriter, r *http.Request) {
+	
+	get_mem_table()
+	
 }
 
-// func searchInMemTableTo(real_Index_from *int, real_Index_to *int, Key_id_to *int, table_from string, result_to *int ){
-// 	// + or -1
-// 	var current_real_Index_from int;
-// 	if (mt.Rows[*real_Index_to].Key_id!=*Key_id_to || mt.Rows[*real_Index_to].Table_name == table_from){
-		
-// 		var binRound float64 = (float64(*real_Index_from) + float64(*real_Index_to))/2.0
-// 		current_real_Index_from = int(math.Round(binRound))
-// 		fmt.Println("current_real_Index_to:::::::BinarySearch")
-// 		fmt.Println(current_real_Index_from)
-// 		*result_to = current_real_Index_from
-
-// 		if (mt.Rows[current_real_Index_from].Key_id>*Key_id_to && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_to != current_real_Index_from){
-// 			*real_Index_to = current_real_Index_from
-// 			searchInMemTableTo(real_Index_from, real_Index_to, Key_id_to, table_from, result_to)
-// 		}else if (mt.Rows[current_real_Index_from].Key_id<*Key_id_to && mt.Rows[current_real_Index_from].Table_name == table_from && *real_Index_from != current_real_Index_from){
-// 			*real_Index_from = current_real_Index_from
-// 			searchInMemTableTo(real_Index_from, real_Index_to, Key_id_to, table_from, result_to)
-// 		}
-// 	}
-// }
 
 func handleRequests(configs *config ) {
 
@@ -362,11 +245,10 @@ func handleRequests(configs *config ) {
 	//myRouter.HandleFunc("/"+ configs.Instance_name + "/", homePage)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_all", get_all)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_rows", get_rows)
-
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_range", get_range)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_slices_worker", get_slices_worker)
-	
-
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/update_index_manager", update_index_manager)
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/load_mem_table", load_mem_table)
 
 
 	log.Fatal(http.ListenAndServe(":"+ configs.Instance_Port, myRouter))
@@ -386,8 +268,6 @@ func main() {
 	root, err := ioutil.ReadAll(configfile)
 	var configs config
 	json.Unmarshal(root, &configs)
-	get_mem_table()
-
 	handleRequests(&configs)
 }
 
@@ -417,24 +297,28 @@ func get_index_table() index_table{
 }
 
 
+//Param: mem_table_from_to
 func get_mem_table(){
 	configfile, err := os.Open("mem_table.json")
     if err != nil {
+		fmt.Println(err)
 		log.Fatal(err)
 	}
 	defer configfile.Close()
 	root, err := ioutil.ReadAll(configfile)
 	err = json.Unmarshal(root, &mt)
 	if err!= nil{
+		fmt.Println(err)
 		log.Fatal(err)
+		fmt.Println(err)
 	}
 
 	fmt.Println("MemoryTable:::::::get_mem_table")
-	fmt.Println(mt)
+	//fmt.Println(mt)
 	fmt.Println("Pointer:::::::get_mem_table")
-	fmt.Println(&mt)
+	//fmt.Println(&mt)
 	fmt.Println("JSON:::::::get_mem_table")
-	fmt.Println(root)
+	//fmt.Println(root)
 }
 
 func check_index_manager(){}
@@ -445,11 +329,3 @@ func update_index_manager(w http.ResponseWriter, r *http.Request){
 }
 
 
-// func Poller(in, out chan *Resource) {
-//     for r := range in {
-//         // poll the URL
-
-//         // send the processed Resource to out
-//         out <- r
-//     }
-// }
