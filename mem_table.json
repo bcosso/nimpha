@@ -1,10 +1,11 @@
 {
 "key_id": 1, "mem_row": [
-{"key_id": 1, "table_name": "table1","document": "teste1"},
-{"key_id": 2, "table_name": "table1","document": "teste2"},
-{"key_id": 3, "table_name": "table1","document": "teste3"},
-{"key_id": 4, "table_name": "table1","document": "teste4"},
-{"key_id": 5, "table_name": "table1","document": "teste5"},
-{"key_id": 6, "table_name": "table1","document": "teste6"}
+{"key_id": 1, "table_name": "table2","document": {"name_client" : "teste1", "client_number": "1"}},
+{"key_id": 2, "table_name": "table2","document": {"name_client" : "teste2", "client_number": "2"}},
+{"key_id": 3, "table_name": "table1","document": {"name_client" : "teste3", "client_number": "3"}},
+{"key_id": 4, "table_name": "table1","document": {"name_client" : "teste4", "client_number": "4"}},
+{"key_id": 5, "table_name": "table1","document": {"name_client" : "teste5", "client_number": "5"}},
+{"key_id": 6, "table_name": "table1","document": {"name_client" : "teste6", "client_number": "6"}},
+{"key_id": 7, "table_name": "table1","document": {"name_client" : "teste7", "client_number": "7"}}
 ]
 }
