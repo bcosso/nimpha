@@ -11,7 +11,7 @@ import (
 
 	"net/http"
 	"github.com/gorilla/mux"
-	// "strings"
+	"strings"
 )
 
 
@@ -39,6 +39,7 @@ type index_table struct {
 type index_row struct {
 	Index_from   int `json:"index_from"`
 	Index_to   int `json:"index_to"`
+	Current_index   int `json:"Current_index"`
 	Instance_name   string `json:"instance_name"`
 	Instance_ip   string `json:"instance_ip"`
 	Instance_port string `json:"instance_port"`
@@ -53,18 +54,26 @@ type mem_table struct {
 type mem_row struct {
 	Key_id   int `json:"key_id"`
 	Table_name string `json:"table_name"`
+	Document interface{} `json:"document"`
+	Parsed_Document map[string]interface{}
+}
+
+type wal_file struct {
+	Key_id   int `json:"key_id"`
+	Rows []wal_operation `json:"wal_operation"`
+}
+
+type wal_operation struct {
+	Key_id   int `json:"key_id"`
+	Table_name string `json:"table_name"`
 	Document string `json:"document"`
 }
 
 var it index_table =  get_index_table()
 var mt mem_table
+var wal wal_file
 
 //Client Facing Methods //
-func homePage(w http.ResponseWriter, r *http.Request){
-    fmt.Fprintf(w, "Welcome to the HomePage!")
-    fmt.Println("Endpoint Hit: homePage")
-}
-
 
 func get_all(w http.ResponseWriter, r *http.Request){
     fmt.Fprintf(w, "retrieve all data from table")
@@ -232,11 +241,193 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 }
 
 
+func select_data(w http.ResponseWriter, r *http.Request){
+	//if (len(mt.rows) > 
+	var rows []mem_row
+	
+	// table_name := r.URL.Query().Get("table")
+	// where_field := r.URL.Query().Get("where_field")
+	// where_content := r.URL.Query().Get("where_content")
+	// where_operator := r.URL.Query().Get("where_operator")
+
+	for _, ir := range it.Index_rows {
+		response, err := http.Get("http://" +  ir.Instance_ip + ":" + ir.Instance_port + "/" + ir.Instance_name +  "/get_slices_worker?from=")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+
+		dec := json.NewDecoder(response.Body)
+		dec.DisallowUnknownFields()
+
+		err = dec.Decode(&rows)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+}
+
+func select_data_where_worker_equals(w http.ResponseWriter, r *http.Request) {
+	
+
+	table_name := r.URL.Query().Get("table")
+	where_field := r.URL.Query().Get("where_field")
+	where_content := r.URL.Query().Get("where_content")
+	//where_operator := r.URL.Query().Get("where_operator") // Method only for = operator. Another one will be created for contains, bigger than and smaller than
+
+
+	var rows_result []mem_row
+	for _, row := range mt.Rows {
+		if row.Table_name == table_name{
+			if row.Parsed_Document[where_field] == where_content{
+				rows_result = append(rows_result, row)
+			}
+		}
+			//var result_document 
+		// Unmarshal or Decode the JSON to the interface.
+	}
+
+	json_rows_bytes, _ := json.Marshal(rows_result)
+	fmt.Fprintf(w, string(json_rows_bytes))
+}
+
+func select_data_where_worker_contains(w http.ResponseWriter, r *http.Request) {
+	
+
+	table_name := r.URL.Query().Get("table")
+	where_field := r.URL.Query().Get("where_field")
+	where_content := r.URL.Query().Get("where_content")
+	//where_operator := r.URL.Query().Get("where_operator") // Method only for = operator. Another one will be created for contains, bigger than and smaller than
+
+
+	var rows_result []mem_row
+	for _, row := range mt.Rows {
+		if row.Table_name == table_name{
+			if strings.Contains(row.Parsed_Document[where_field].(string), where_content){
+				rows_result = append(rows_result, row)
+			}
+		}
+			//var result_document 
+		// Unmarshal or Decode the JSON to the interface.
+	}
+
+	json_rows_bytes, _ := json.Marshal(rows_result)
+	fmt.Fprintf(w, string(json_rows_bytes))
+}
+
 func load_mem_table(w http.ResponseWriter, r *http.Request) {
 	
 	get_mem_table()
 	
 }
+
+
+// func write_wal() chan int {
+// 	r := make(chan int)
+// 	fmt.Println("Warming up ...")
+// 	go func() {
+
+// 		wal_file.Rows = 
+// 		for _, row := range wal_file.Rows {
+// 			if row.Key_id >= from && row.Key_id <= to && row.Table_name == table_from{
+// 				rows_result = append(rows_result, row)
+// 			}  
+// 		}
+		
+
+// 		fmt.Println("Done ...")
+// 	}()
+// 	return r
+// }
+
+func insert(w http.ResponseWriter, r *http.Request) {
+	
+
+	document := r.URL.Query().Get("document")
+	table_from := r.URL.Query().Get("table_from")
+
+	index_row := it.Index_rows[len(it.Index_rows)-1]
+	if index_row.Current_index < index_row.Index_to{
+		index_row.Current_index++
+		response, err := http.Get("http://" +  index_row.Instance_ip + ":" + index_row.Instance_port + "/" + index_row.Instance_name +  "/insert_worker?key_id="+ strconv.Itoa(index_row.Current_index) + "&document=" + document + "&table_from=" + table_from)
+		if err != nil {
+			log.Fatal(err)
+		}
+		it.Index_rows = append(it.Index_rows, index_row)
+		fmt.Println(response.Body)	
+
+	}else{
+
+	}
+
+	//Check if IndexRow is full. Then create another and append.Otherwise, just append to the mem_table and ++ the counter.
+	//The next One should be rotational list of available servers
+	//create keep alive
+	//aftter that, create method to update INDEX TABLES through the servers and create WRITE AHEAD LOG to be shared among the servers and order the indexes according to the request.
+
+
+	fmt.Fprintf(w, strconv.Itoa(index_row.Current_index))
+}
+
+func insert_worker(w http.ResponseWriter, r *http.Request) {
+	
+	key_id := r.URL.Query().Get("key_id")
+	ikey_id, err := strconv.Atoi(key_id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var result mem_row
+	result.Key_id = ikey_id
+	//result.Document = r.URL.Query().Get("document")
+	result.Table_name = r.URL.Query().Get("table")
+	
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	
+
+    var p interface {}
+	err = dec.Decode(&p)
+	
+	result.Document = p
+	result.Parsed_Document = p.(map[string]interface{})
+	mt.Rows = append(mt.Rows, result)
+
+	fmt.Println(mt)
+	//Check if IndexRow is full. Then create another and append.Otherwise, just append to the mem_table and ++ the counter.
+	//The next One should be rotational list of available servers
+	//create keep alive
+
+
+
+	fmt.Fprintf(w, "Success")
+}
+
+func update_index_table(w http.ResponseWriter, r *http.Request) {
+	
+	//key_id := r.URL.Query().Get("key_id")
+	//ikey_id, err := strconv.Atoi(key_id)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//var row index_row
+	//result.Current_index = ikey_id
+	//result.Document = r.URL.Query().Get("document")
+	//result.Table_name = r.URL.Query().Get("table_from")
+	//mt.Rows = append(mt.Rows, result)
+
+	//fmt.Println(mt)
+	//Check if IndexRow is full. Then create another and append.Otherwise, just append to the mem_table and ++ the counter.
+	//The next One should be rotational list of available servers
+	//create keep alive
+
+
+
+	//fmt.Fprintf(w, "Success")
+}
+
+
+
 
 
 func handleRequests(configs *config ) {
@@ -249,7 +440,10 @@ func handleRequests(configs *config ) {
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_slices_worker", get_slices_worker)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/update_index_manager", update_index_manager)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/load_mem_table", load_mem_table)
-
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/insert", insert)
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/insert_worker", insert_worker) 
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data_where_worker_equals", select_data_where_worker_equals)
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data_where_worker_contains", select_data_where_worker_contains)
 
 	log.Fatal(http.ListenAndServe(":"+ configs.Instance_Port, myRouter))
 }
@@ -306,11 +500,34 @@ func get_mem_table(){
 	}
 	defer configfile.Close()
 	root, err := ioutil.ReadAll(configfile)
-	err = json.Unmarshal(root, &mt)
+	err = json.Unmarshal([]byte(root), &mt)
+
 	if err!= nil{
 		fmt.Println(err)
 		log.Fatal(err)
 		fmt.Println(err)
+	}
+	current_index_row := 0
+	for _, row := range mt.Rows {
+		current_document := row.Document
+		fmt.Println(current_document)
+		parsed_document, ok :=  current_document.(map[string] interface{})
+		//err = json.Unmarshal(current_document, &parsed_document)
+
+
+		if !ok{
+			fmt.Println("ERROR!")
+			
+		}
+		row.Parsed_Document = parsed_document
+		fmt.Println(row.Parsed_Document["name_client"])
+		mt.Rows[current_index_row].Parsed_Document = parsed_document
+		current_index_row ++
+			//var result_document 
+
+	// Unmarshal or Decode the JSON to the interface.
+			
+		
 	}
 
 	fmt.Println("MemoryTable:::::::get_mem_table")
@@ -327,5 +544,3 @@ func update_index_manager(w http.ResponseWriter, r *http.Request){
     fmt.Fprintf(w, "update current index manager")
     fmt.Println("Endpoint Hit: get_rows")
 }
-
-
