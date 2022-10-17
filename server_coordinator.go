@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
     "fmt"
 	"log"
 	// "errors"	
 	"os"
+	//"io"
 	"io/ioutil"
 	"encoding/json"
 	"strconv"
@@ -32,6 +34,8 @@ type peers struct {
 
 type index_table struct {
 	Index_id   int `json:"index_id"`
+	Index_WAL int  `json:"index_wal"`
+	Latest_Node_Insert int  `json:"latest_node_isert"`
 	Index_rows   []index_row `json:"index_row"`
 }
 
@@ -65,13 +69,14 @@ type wal_file struct {
 
 type wal_operation struct {
 	Key_id   int `json:"key_id"`
-	Table_name string `json:"table_name"`
-	Document string `json:"document"`
+	Node_name string `json:"node_name"`
+	Node_index int `json:"node_index"`
+	Rows []mem_row `json:"mem_row"`
 }
 
 var it index_table =  get_index_table()
 var mt mem_table
-var wal wal_file
+var wal []wal_operation
 
 //Client Facing Methods //
 
@@ -233,7 +238,7 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 	for _, row := range mt.Rows {
 		if row.Key_id >= from && row.Key_id <= to && row.Table_name == table_from{
 			rows_result = append(rows_result, row)
-		}  
+		}
 	}
 
 	json_rows_bytes, _ := json.Marshal(rows_result)
@@ -341,33 +346,134 @@ func load_mem_table(w http.ResponseWriter, r *http.Request) {
 // 	return r
 // }
 
+func get_wal(data_post * []mem_row ) int {
+
+	index_row := it.Index_rows[it.Index_WAL]
+	
+	json_data, err := json.Marshal(data_post)
+
+    if err != nil {
+        log.Fatal(err)
+	}
+
+	fmt.Println("get_wal::::::") 
+	
+	response, err := http.Post("http://" +  index_row.Instance_ip + ":" + index_row.Instance_port + "/" + index_row.Instance_name +  "/read_wal", "application/json", bytes.NewBuffer(json_data))
+	if err != nil {
+		log.Fatal(err)
+		fmt.Println("err::::::") 
+	}
+	fmt.Println("res::::::") 
+	fmt.Println(response.Body) 
+	fmt.Println(":::::::::") 
+
+	var p string
+	// dec := json.NewDecoder(response.Body)
+	// dec.Decode(&p)
+	b, err := ioutil.ReadAll(response.Body)
+	p = string(b) 
+	
+	fmt.Println("-----Reponse:" + p)
+	iconv, err := strconv.Atoi(p)
+
+	return iconv;
+
+	//fmt.Fprintf(w, strconv.Itoa(index_row.Current_index))
+}
+
+
+func read_wal(w http.ResponseWriter, r *http.Request) {
+	
+
+	//insert_count := r.URL.Query().Get("insert_count")
+
+	//get body with the mem_row
+
+	fmt.Println("read_wal::::::") 
+
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	
+	var wo wal_operation
+
+
+
+    var p []mem_row
+	err := dec.Decode(&p)
+	if err != nil {
+		log.Fatal(err)
+	}
+	wo.Rows = p 
+	fmt.Println("read_wal::::::") 
+
+	next_node_to_record := 0
+
+	if len(wal) > 0{
+		latest_wal := wal[len(wal)-1]
+		if latest_wal.Node_index < len(it.Index_rows) -1 {
+			next_node_to_record = latest_wal.Node_index + 1
+		}
+	}
+	wo.Node_index = next_node_to_record
+	wal = append(wal, wo)
+
+	fmt.Println("WAL::::::") 
+	fmt.Println(wal)
+	
+
+	//index_row := it.Index_rows[len(it.Index_rows)-1]
+	fmt.Fprintf(w, strconv.Itoa(next_node_to_record))
+}
+
+
+
 func insert(w http.ResponseWriter, r *http.Request) {
 	
 
-	document := r.URL.Query().Get("document")
-	table_from := r.URL.Query().Get("table_from")
-
-	index_row := it.Index_rows[len(it.Index_rows)-1]
-	if index_row.Current_index < index_row.Index_to{
-		index_row.Current_index++
-		response, err := http.Get("http://" +  index_row.Instance_ip + ":" + index_row.Instance_port + "/" + index_row.Instance_name +  "/insert_worker?key_id="+ strconv.Itoa(index_row.Current_index) + "&document=" + document + "&table_from=" + table_from)
-		if err != nil {
-			log.Fatal(err)
-		}
-		it.Index_rows = append(it.Index_rows, index_row)
-		fmt.Println(response.Body)	
-
-	}else{
-
+	key_id := r.URL.Query().Get("key_id")
+	ikey_id, err := strconv.Atoi(key_id)
+	if err != nil {
+		log.Fatal(err)
 	}
+	var result mem_row
+	var coll []mem_row
+	result.Key_id = ikey_id
+	result.Table_name = r.URL.Query().Get("table")
+	
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+    var p interface {}
+	err = dec.Decode(&p)
+	result.Document = p
+	result.Parsed_Document = p.(map[string]interface{})
 
 	//Check if IndexRow is full. Then create another and append.Otherwise, just append to the mem_table and ++ the counter.
 	//The next One should be rotational list of available servers
 	//create keep alive
 	//aftter that, create method to update INDEX TABLES through the servers and create WRITE AHEAD LOG to be shared among the servers and order the indexes according to the request.
 
+	coll = append(coll, result)
+	index_it := get_wal(&coll)
+	index_row := it.Index_rows[index_it] 
+	json_data, err := json.Marshal(coll)
 
-	fmt.Fprintf(w, strconv.Itoa(index_row.Current_index))
+	fmt.Println("JSON_DATA")
+	fmt.Println(coll)
+
+
+    if err != nil {
+        log.Fatal(err)
+	}
+	
+	response, err := http.Post("http://" +  index_row.Instance_ip + ":" + index_row.Instance_port + "/" + index_row.Instance_name +  "/insert_worker?table=" + result.Table_name + "&key_id=" + strconv.Itoa(result.Key_id), "application/json", bytes.NewBuffer(json_data))
+	if err != nil {
+	 	log.Fatal(err)
+	}
+
+	fmt.Println(response)
+
+	fmt.Fprintf(w,"Success")
 }
 
 func insert_worker(w http.ResponseWriter, r *http.Request) {
@@ -386,11 +492,14 @@ func insert_worker(w http.ResponseWriter, r *http.Request) {
 	dec.DisallowUnknownFields()
 	
 
-    var p interface {}
+    var p []mem_row
 	err = dec.Decode(&p)
 	
-	result.Document = p
-	result.Parsed_Document = p.(map[string]interface{})
+	fmt.Println("Output-----------")
+	fmt.Println(p)
+
+	result.Document = p[0].Document
+	result.Parsed_Document = p[0].Document.(map[string]interface{})
 	mt.Rows = append(mt.Rows, result)
 
 	fmt.Println(mt)
@@ -432,6 +541,8 @@ func update_index_table(w http.ResponseWriter, r *http.Request) {
 
 func handleRequests(configs *config ) {
 
+
+	
 	myRouter := mux.NewRouter().StrictSlash(true)
 	//myRouter.HandleFunc("/"+ configs.Instance_name + "/", homePage)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_all", get_all)
@@ -440,6 +551,7 @@ func handleRequests(configs *config ) {
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_slices_worker", get_slices_worker)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/update_index_manager", update_index_manager)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/load_mem_table", load_mem_table)
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/read_wal", read_wal)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/insert", insert)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/insert_worker", insert_worker) 
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data_where_worker_equals", select_data_where_worker_equals)
@@ -454,6 +566,8 @@ func handleRequests(configs *config ) {
 
 //Core Methods
 func main() {
+	go dump_wal("------------------------------WAL---------------------------------")
+	//go dump_data("------------------------------Data---------------------------------")
 	configfile, err := os.Open("configfile.json")
     if err != nil {
 		log.Fatal(err)
@@ -544,3 +658,5 @@ func update_index_manager(w http.ResponseWriter, r *http.Request){
     fmt.Fprintf(w, "update current index manager")
     fmt.Println("Endpoint Hit: get_rows")
 }
+
+
