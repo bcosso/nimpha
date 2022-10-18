@@ -346,6 +346,23 @@ func load_mem_table(w http.ResponseWriter, r *http.Request) {
 // 	return r
 // }
 
+func get_wal_disk(){
+	configfile, err := os.Open("wal_file.json")
+    if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
+	}
+	defer configfile.Close()
+	root, err := ioutil.ReadAll(configfile)
+	err = json.Unmarshal([]byte(root), &wal)
+
+	if err!= nil{
+		fmt.Println(err)
+		log.Fatal(err)
+		fmt.Println(err)
+	}
+}
+
 func get_wal(data_post * []mem_row ) int {
 
 	index_row := it.Index_rows[it.Index_WAL]
@@ -566,6 +583,7 @@ func handleRequests(configs *config ) {
 
 //Core Methods
 func main() {
+	get_wal_disk()
 	go dump_wal("------------------------------WAL---------------------------------")
 	//go dump_data("------------------------------Data---------------------------------")
 	configfile, err := os.Open("configfile.json")
