@@ -18,3 +18,11 @@ http://127.0.0.1:10000/traira/insert_worker?table=table1&key_id=15
 With body:
 {"client_number":"15","name_client":"teste15"}
 
+TODO:
+ - Update
+ - Error treatment
+ - Node unavailability treatment
+ - Separate components in the code (refactor)
+ - Replication of WAL
+ - Replication of data
+ 
