@@ -7,11 +7,8 @@ import (
 	"encoding/json"
 )
 
-
-
 const data_interval = 10000
 const wal_interval = 1000
-
 
 func dump_data(s string) {
 	for (true){
@@ -22,8 +19,10 @@ func dump_data(s string) {
 }
 
 func dump_mt(s string) {
-	fmt.Println(s)
-	fmt.Println(mt)
+	file, _ := json.MarshalIndent(mt, "", " ")
+	_ = ioutil.WriteFile("mem_table.json", file, 0644)
+   fmt.Println(s)
+   fmt.Println(mt)
 }
 
 func dump_wal(s string) {
@@ -37,6 +36,6 @@ func dump_wal(s string) {
 }
 
 func dump_it(s string) {
-	fmt.Println(s)
-	fmt.Println(mt)
+	file, _ := json.MarshalIndent(mt, "", " ")
+	_ = ioutil.WriteFile("index_table.json", file, 0644)
 }
