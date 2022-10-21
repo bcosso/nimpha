@@ -25,4 +25,5 @@ TODO:
  - Separate components in the code (refactor)
  - Replication of WAL
  - Replication of data
+ - Convert from HTTP to a protocol lower in the OSI model 
  
