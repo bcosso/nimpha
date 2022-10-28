@@ -135,6 +135,7 @@ func handleRequests(configs *config ) {
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/update_wal", update_wal)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/insert", insert)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/insert_worker", insert_worker) 
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data", select_data)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data_where_worker_equals", select_data_where_worker_equals)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data_where_worker_contains", select_data_where_worker_contains)
 
