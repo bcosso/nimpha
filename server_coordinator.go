@@ -120,11 +120,8 @@ func update_index_table(w http.ResponseWriter, r *http.Request) {
 
 
 func handleRequests(configs *config ) {
-
-
 	
 	myRouter := mux.NewRouter().StrictSlash(true)
-	//myRouter.HandleFunc("/"+ configs.Instance_name + "/", homePage)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_all", get_all)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_rows", get_rows)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/get_range", get_range)
@@ -138,6 +135,10 @@ func handleRequests(configs *config ) {
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data", select_data)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data_where_worker_equals", select_data_where_worker_equals)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data_where_worker_contains", select_data_where_worker_contains)
+
+	myRouter.HandleFunc("/"+ configs.Instance_name + "/delete_data_where_worker_contains", delete_data_where_worker_contains)
+
+	
 
 	log.Fatal(http.ListenAndServe(":"+ configs.Instance_Port, myRouter))
 }
@@ -177,13 +178,6 @@ func get_index_table() index_table{
 	if err := json.Unmarshal([]byte(string(root)), &_it) ; err != nil {
         log.Fatal(err)
     }
-	
-	fmt.Println("IndexTable:::::::get_index_table")
-	fmt.Println(_it)
-	fmt.Println("Pointer:::::::get_index_table")
-	fmt.Println(&_it)
-	fmt.Println("JSON:::::::get_index_table")
-	fmt.Println(string(root))
 	return _it;
 }
 
@@ -202,7 +196,6 @@ func get_mem_table(){
 	if err!= nil{
 		fmt.Println(err)
 		log.Fatal(err)
-		fmt.Println(err)
 	}
 	current_index_row := 0
 	for _, row := range mt.Rows {
@@ -210,7 +203,6 @@ func get_mem_table(){
 		fmt.Println(current_document)
 		parsed_document, ok :=  current_document.(map[string] interface{})
 		//err = json.Unmarshal(current_document, &parsed_document)
-
 
 		if !ok{
 			fmt.Println("ERROR!")
@@ -220,19 +212,7 @@ func get_mem_table(){
 		fmt.Println(row.Parsed_Document["name_client"])
 		mt.Rows[current_index_row].Parsed_Document = parsed_document
 		current_index_row ++
-			//var result_document 
-
-	// Unmarshal or Decode the JSON to the interface.
-			
-		
 	}
-
-	fmt.Println("MemoryTable:::::::get_mem_table")
-	//fmt.Println(mt)
-	fmt.Println("Pointer:::::::get_mem_table")
-	//fmt.Println(&mt)
-	fmt.Println("JSON:::::::get_mem_table")
-	//fmt.Println(root)
 }
 
 func check_index_manager(){}
