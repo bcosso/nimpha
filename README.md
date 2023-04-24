@@ -18,6 +18,9 @@ http://127.0.0.1:10000/traira/insert_worker?table=table1&key_id=15
 With body:
 {"client_number":"15","name_client":"teste15"}
 
+Delete CONTAINS:
+http://127.0.0.1:10000/traira/delete_data_where?where_operator=contains&table=table1&where_field=name_client&where_content=teste7
+
 TODO:
  - Update
  - Error treatment
