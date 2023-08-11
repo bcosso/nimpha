@@ -36,6 +36,6 @@ func dump_wal(s string) {
 }
 
 func dump_it(s string) {
-	file, _ := json.MarshalIndent(mt, "", " ")
+	file, _ := json.MarshalIndent(it, "", " ")
 	_ = ioutil.WriteFile("index_table.json", file, 0644)
 }
