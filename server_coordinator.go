@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"github.com/gorilla/mux"
 	"net/http"
+	"rsocket_json_requests"
+	"strconv"
 )
 
 
@@ -89,6 +91,14 @@ func load_mem_table(w http.ResponseWriter, r *http.Request) {
 }
 
 
+func load_mem_table_rsocket(payload interface{}) interface{}{
+	get_mem_table()
+	return payload
+}
+
+
+
+
 
 
 
@@ -139,9 +149,48 @@ func handleRequests(configs *config ) {
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/delete_data_where_worker_contains", delete_data_where_worker_contains)
 
 	
-
+	//rsocket_json_requests.RequestConfigs("127.0.0.1", 7878)
 	log.Fatal(http.ListenAndServe(":"+ configs.Instance_Port, myRouter))
 }
+
+
+
+func handleRequests_rsocket(configs *config ) {
+	
+
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_all", get_all_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_rows", get_rows_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_range", get_range_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_slices_worker", get_slices_worker_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_index_manager", update_index_manager)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/load_mem_table", load_mem_table_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/read_wal", read_wal)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_wal", update_wal)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert", insert)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert_worker", insert_worker) 
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/read_wal", read_wal_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_wal", update_wal_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert", insert_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert_worker", insert_worker_rsocket) 
+
+
+
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data", select_data_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data_where_worker_equals", select_data_where_worker_equals_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data_where_worker_contains", select_data_where_worker_contains_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where", delete_data_where_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
+
+	//	rsocket_json_requests.SetTLSConfig("cert.pem", "key.pem")
+
+	_port, _ := strconv.Atoi(configs.Instance_Port)
+	rsocket_json_requests.RequestConfigsServer(_port)
+
+	rsocket_json_requests.ServeCalls()
+
+	//log.Fatal(http.ListenAndServe(":"+ configs.Instance_Port, myRouter))
+}
+
 
 // Nimpha Facing Methods //
 
@@ -160,7 +209,7 @@ func main() {
 	root, err := ioutil.ReadAll(configfile)
 	
 	json.Unmarshal(root, &configs_file)
-	handleRequests(&configs_file)
+	handleRequests_rsocket(&configs_file)
 }
 
 
