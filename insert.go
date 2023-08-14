@@ -104,8 +104,6 @@ func insert_rsocket(payload interface{})  interface{} {
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
 	json.Unmarshal([]byte(myString), &payload_content)
-	fmt.Println("-------------------CALLED0----------------------")
-	//payload_content, _ :=  payload.(map[string] interface{})
 	key_id := payload_content["key_id"].(string)
 	ikey_id, err := strconv.Atoi(key_id)
 
@@ -119,32 +117,12 @@ func insert_rsocket(payload interface{})  interface{} {
 	result.Table_name = payload_content["table"].(string)
 	intermediate_inteface := payload_content["body"].(map[string]interface{})
 	
-	//var jsonMap interface{}
+	fmt.Println(intermediate_inteface)
+	fmt.Println(payload_content)
 
-	
-
-	// json_rows_bytes, _ := json.Marshal(jsonMap)
-	
-	 fmt.Println(intermediate_inteface)
-	 fmt.Println("-------------------CALLED1----------------------")
-	 fmt.Println(payload_content)
-	 //jsonMap := make(map[string]interface{})
-	 //json.Unmarshal(intermediate_inteface, &jsonMap)
-	 // reader := bytes.NewReader(json_rows_bytes)
-	// dec := json.NewDecoder(reader)
-	// dec.DisallowUnknownFields()
-	fmt.Println("-------------------CALLED2----------------------")
-	//fmt.Println(jsonMap["document"])
-	// var p interface {}
-	//fmt.Println(payload_content["document"])
-	// err = dec.Decode(&p)
-	// fmt.Println(p)
-	fmt.Println("-------------------CALLED3----------------------")
 	result.Document = intermediate_inteface
 	result.Parsed_Document = intermediate_inteface
-	fmt.Println(intermediate_inteface)
-	
-	fmt.Println("-------------------CALLED4----------------------")
+
 
 	//Check if IndexRow is full. Then create another and append.Otherwise, just append to the mem_table and ++ the counter.
 	//The next One should be rotational list of available servers
@@ -154,9 +132,7 @@ func insert_rsocket(payload interface{})  interface{} {
 	coll = append(coll, result)
 	index_it := get_wal_rsocket(&coll)
 	index_row := it.Index_rows[index_it] 
-	//json_data, err := json.Marshal(coll)
 
-	fmt.Println("JSON_DATA")
 	fmt.Println(coll)
 	var param interface{}
 	param = map[string]interface{}{
@@ -173,7 +149,6 @@ func insert_rsocket(payload interface{})  interface{} {
 	_port, _ := strconv.Atoi(index_row.Instance_port)
 	rsocket_json_requests.RequestConfigs(index_row.Instance_ip, _port)
 	response, err := rsocket_json_requests.RequestJSON("/" + index_row.Instance_name +  "/insert_worker", string(jsonParam))
-	fmt.Println("BEFORE------------------")
 	if (err != nil){
 		fmt.Println(err)
 	}
@@ -206,8 +181,7 @@ func insert_worker_rsocket(payload interface{}) interface{} {
 
 
 	intermediate_inteface := payload_content["body"].([]interface{})
-	
-	//intermediate_inteface := payload_content["body"].(interface{})
+
 	json_rows_bytes, _ := json.Marshal(intermediate_inteface)
 	
 	fmt.Println(intermediate_inteface)
@@ -220,19 +194,14 @@ func insert_worker_rsocket(payload interface{}) interface{} {
     var p []mem_row
 	err = dec.Decode(&p)
 	
-	fmt.Println("Output-----------")
+	fmt.Println("-----------Output-----------")
 	fmt.Println(p)
 
 	result.Document = p[0].Document
 	result.Parsed_Document = p[0].Document.(map[string]interface{})
 	mt.Rows = append(mt.Rows, result)
 
-	fmt.Println(mt)
-	//Check if IndexRow is full. Then create another and append.Otherwise, just append to the mem_table and ++ the counter.
-	//The next One should be rotational list of available servers
-	//create keep alive
-
-
+	//fmt.Println(mt)
 
 	return "Success"
 }

@@ -325,12 +325,12 @@ func select_data_rsocket(payload interface{}) interface{}{
 	where_operator := payload_content["where_operator"].(string)
 
 	var jsonStr = `
-{
-"table":"%s",
-"where_field":"%s",
-"where_content":"%s"
-}
-`
+	{
+	"table":"%s",
+	"where_field":"%s",
+	"where_content":"%s"
+	}
+	`
 
 	for _, ir := range configs_file.Peers {
 		jsonStr = fmt.Sprintf(jsonStr,table_name,where_field, where_content)
@@ -341,16 +341,14 @@ func select_data_rsocket(payload interface{}) interface{}{
 		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
 		
 		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
-		fmt.Println("BEFORE------------------")
 		if (err != nil){
 			fmt.Println(err)
 		}else{
 			if response != nil {
-				fmt.Println("IN------------------")
 				intermediate_inteface := response.([]interface{})
 				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
 				
-				fmt.Println(intermediate_inteface)
+				//fmt.Println(intermediate_inteface)
 				reader := bytes.NewReader(json_rows_bytes)
 
 				dec := json.NewDecoder(reader)
@@ -360,39 +358,11 @@ func select_data_rsocket(payload interface{}) interface{}{
 				if err != nil {
 					log.Fatal(err)
 				}
-				fmt.Println("ROWS----------------")
-				fmt.Println(rows)
 
 				result = append(result, rows...)
 			}
 		}
-
-		fmt.Println("AFTER------------------")
 	}
 
 	return result
 }
-
-// func select_data_where_worker_contains(w http.ResponseWriter, r *http.Request) {
-	
-
-// 	table_name := r.URL.Query().Get("table")
-// 	where_field := r.URL.Query().Get("where_field")
-// 	where_content := r.URL.Query().Get("where_content")
-// 	//where_operator := r.URL.Query().Get("where_operator") // Method only for = operator. Another one will be created for contains, bigger than and smaller than
-
-
-// 	var rows_result []mem_row
-// 	for _, row := range mt.Rows {
-// 		if row.Table_name == table_name{
-// 			if strings.Contains(row.Parsed_Document[where_field].(string), where_content){
-// 				rows_result = append(rows_result, row)
-// 			}
-// 		}
-// 			//var result_document 
-// 		// Unmarshal or Decode the JSON to the interface.
-// 	}
-
-// 	json_rows_bytes, _ := json.Marshal(rows_result)
-// 	fmt.Fprintf(w, string(json_rows_bytes))
-//}

@@ -97,11 +97,6 @@ func load_mem_table_rsocket(payload interface{}) interface{}{
 }
 
 
-
-
-
-
-
 func update_index_table(w http.ResponseWriter, r *http.Request) {
 	
 	//key_id := r.URL.Query().Get("key_id")
@@ -148,8 +143,6 @@ func handleRequests(configs *config ) {
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/delete_data_where", delete_data_where)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/delete_data_where_worker_contains", delete_data_where_worker_contains)
 
-	
-	//rsocket_json_requests.RequestConfigs("127.0.0.1", 7878)
 	log.Fatal(http.ListenAndServe(":"+ configs.Instance_Port, myRouter))
 }
 
@@ -164,17 +157,10 @@ func handleRequests_rsocket(configs *config ) {
 	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_slices_worker", get_slices_worker_rsocket)
 	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_index_manager", update_index_manager)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/load_mem_table", load_mem_table_rsocket)
-	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/read_wal", read_wal)
-	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_wal", update_wal)
-	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert", insert)
-	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert_worker", insert_worker) 
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/read_wal", read_wal_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_wal", update_wal_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert", insert_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert_worker", insert_worker_rsocket) 
-
-
-
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data", select_data_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data_where_worker_equals", select_data_where_worker_equals_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data_where_worker_contains", select_data_where_worker_contains_rsocket)
@@ -187,8 +173,6 @@ func handleRequests_rsocket(configs *config ) {
 	rsocket_json_requests.RequestConfigsServer(_port)
 
 	rsocket_json_requests.ServeCalls()
-
-	//log.Fatal(http.ListenAndServe(":"+ configs.Instance_Port, myRouter))
 }
 
 
@@ -199,8 +183,9 @@ func handleRequests_rsocket(configs *config ) {
 //Core Methods
 func main() {
 	get_wal_disk()
-	//go dump_wal("------------------------------WAL---------------------------------")
-	//go dump_data("------------------------------Data---------------------------------")
+	get_mem_table()
+	go dump_wal("------------------------------WAL---------------------------------")
+	go dump_data("------------------------------Data---------------------------------")
 	configfile, err := os.Open("configfile.json")
     if err != nil {
 		log.Fatal(err)
@@ -249,7 +234,7 @@ func get_mem_table(){
 	current_index_row := 0
 	for _, row := range mt.Rows {
 		current_document := row.Document
-		fmt.Println(current_document)
+		//fmt.Println(current_document)
 		parsed_document, ok :=  current_document.(map[string] interface{})
 		//err = json.Unmarshal(current_document, &parsed_document)
 
@@ -258,7 +243,7 @@ func get_mem_table(){
 			
 		}
 		row.Parsed_Document = parsed_document
-		fmt.Println(row.Parsed_Document["name_client"])
+		//fmt.Println(row.Parsed_Document["name_client"])
 		mt.Rows[current_index_row].Parsed_Document = parsed_document
 		current_index_row ++
 	}

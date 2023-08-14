@@ -357,12 +357,12 @@ func get_wal_rsocket(data_post * []mem_row ) int {
 
 	fmt.Println("-------------data_post and JSON DATA ------------------------")
 
-	fmt.Println(data_post)
+	//fmt.Println(data_post)
 
 	
 	json_data, err := json.Marshal(data_post)
 
-	fmt.Println(string(json_data))
+	//fmt.Println(string(json_data))
 
     if err != nil {
         log.Fatal(err)
@@ -406,7 +406,7 @@ func get_wal_rsocket(data_post * []mem_row ) int {
 	payload_content, _ :=  response.(map[string] interface{})
 	p := payload_content["body"].(float64)
 	fmt.Println("-------Response-------")
-	fmt.Println(p)
+	//fmt.Println(p)
 	//iconv, err := strconv.Atoi(p)
 	iconv := int(p)
 	return iconv
