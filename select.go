@@ -1,15 +1,17 @@
 package main
 
 import (
+	"bytes"
     "fmt"
 	"log"
-	// "errors"	
+	//"errors"	
 	//"io"
 	"encoding/json"
 	"strconv"
 	"net/http"
 	"github.com/gorilla/mux"
 	"strings"
+	"rsocket_json_requests"
 )
 
 func get_all(w http.ResponseWriter, r *http.Request){
@@ -181,27 +183,34 @@ func get_slices_worker(w http.ResponseWriter, r *http.Request) {
 func select_data(w http.ResponseWriter, r *http.Request){
 	//if (len(mt.rows) > 
 	var rows []mem_row
-	
-	// table_name := r.URL.Query().Get("table")
-	// where_field := r.URL.Query().Get("where_field")
-	// where_content := r.URL.Query().Get("where_content")
-	// where_operator := r.URL.Query().Get("where_operator")
+	var result []mem_row
+	table_name := r.URL.Query().Get("table")
+	where_field := r.URL.Query().Get("where_field")
+	where_content := r.URL.Query().Get("where_content")
+	where_operator := r.URL.Query().Get("where_operator")
 
-	for _, ir := range it.Index_rows {
-		response, err := http.Get("http://" +  ir.Instance_ip + ":" + ir.Instance_port + "/" + ir.Instance_name +  "/get_slices_worker?from=")
+	for _, ir := range configs_file.Peers {
+		url := "http://" +  ir.Ip + ":" + ir.Port + "/" + ir.Name +  "/select_data_where_worker_" + where_operator + "?table=" + table_name + "&where_field=" + where_field + "&where_content=" + where_content
+		fmt.Println(url)
+		response, err := http.Get(url)
 		if err != nil {
-			log.Fatal(err)
-		}
+			fmt.Println(err)
+		}else{
 
 
-		dec := json.NewDecoder(response.Body)
-		dec.DisallowUnknownFields()
+			dec := json.NewDecoder(response.Body)
+			dec.DisallowUnknownFields()
 
-		err = dec.Decode(&rows)
-		if err != nil {
-			log.Fatal(err)
+			err = dec.Decode(&rows)
+			if err != nil {
+				log.Fatal(err)
+			}
+			result = append(result, rows...)
 		}
 	}
+
+	json_rows_bytes, _ := json.Marshal(result)
+	fmt.Fprintf(w, string(json_rows_bytes))
 
 }
 
@@ -251,4 +260,109 @@ func select_data_where_worker_contains(w http.ResponseWriter, r *http.Request) {
 
 	json_rows_bytes, _ := json.Marshal(rows_result)
 	fmt.Fprintf(w, string(json_rows_bytes))
+}
+
+
+
+func select_data_where_worker_equals_rsocket(payload interface{}) interface{}{
+	
+	payload_content, ok :=  payload.(map[string] interface{})
+	if !ok{
+		fmt.Println("ERROR!")	
+	}
+
+	table_name := payload_content["table"].(string)
+	where_field := payload_content["where_field"].(string)
+	where_content := payload_content["where_content"].(string)
+
+	var rows_result []mem_row
+	for _, row := range mt.Rows {
+		if row.Table_name == table_name{
+			if row.Parsed_Document[where_field] == where_content{
+				rows_result = append(rows_result, row)
+			}
+		}
+	}
+
+	return rows_result
+}
+
+func select_data_where_worker_contains_rsocket(payload interface{}) interface{}{
+	
+	payload_content, ok :=  payload.(map[string] interface{})
+	if !ok{
+		fmt.Println("ERROR!")	
+	}
+	fmt.Println("It's called")
+	table_name := payload_content["table"].(string)
+	where_field := payload_content["where_field"].(string)
+	where_content := payload_content["where_content"].(string)
+
+	var rows_result []mem_row
+	for _, row := range mt.Rows {
+		if row.Table_name == table_name{
+			if strings.Contains(row.Parsed_Document[where_field].(string), where_content){
+				rows_result = append(rows_result, row)
+			}
+		}
+	}
+
+	return rows_result
+}
+
+
+func select_data_rsocket(payload interface{}) interface{}{
+	//if (len(mt.rows) > 
+	var rows []mem_row
+	var result []mem_row
+	payload_content, ok :=  payload.(map[string] interface{})
+	if !ok{
+		fmt.Println("ERROR!")	
+	}
+	table_name := payload_content["table"].(string)
+	where_field := payload_content["where_field"].(string)
+	where_content := payload_content["where_content"].(string)
+	where_operator := payload_content["where_operator"].(string)
+
+	var jsonStr = `
+	{
+	"table":"%s",
+	"where_field":"%s",
+	"where_content":"%s"
+	}
+	`
+
+	for _, ir := range configs_file.Peers {
+		jsonStr = fmt.Sprintf(jsonStr,table_name,where_field, where_content)
+		jsonMap := make(map[string]interface{})
+		json.Unmarshal([]byte(jsonStr), &jsonMap)
+		url := "/" + ir.Name +  "/select_data_where_worker_" + where_operator
+		_port, _ := strconv.Atoi(ir.Port)
+		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
+		
+		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		if (err != nil){
+			fmt.Println(err)
+		}else{
+			if response != nil {
+				intermediate_inteface := response.([]interface{})
+				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+				
+				//fmt.Println(intermediate_inteface)
+				reader := bytes.NewReader(json_rows_bytes)
+
+				dec := json.NewDecoder(reader)
+				dec.DisallowUnknownFields()
+
+				err = dec.Decode(&rows)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				result = append(result, rows...)
+			}
+		}
+	}
+
+	return result
 }

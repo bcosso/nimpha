@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"github.com/gorilla/mux"
 	"net/http"
+	"rsocket_json_requests"
+	"strconv"
 )
 
 
@@ -57,7 +59,7 @@ type mem_table struct {
 type mem_row struct {
 	Key_id   int `json:"key_id"`
 	Table_name string `json:"table_name"`
-	Document interface{} `json:"document"`
+	//Document interface{} `json:"document"`
 	Parsed_Document map[string]interface{}
 }
 
@@ -89,7 +91,10 @@ func load_mem_table(w http.ResponseWriter, r *http.Request) {
 }
 
 
-
+func load_mem_table_rsocket(payload interface{}) interface{}{
+	get_mem_table()
+	return payload
+}
 
 
 func update_index_table(w http.ResponseWriter, r *http.Request) {
@@ -138,10 +143,38 @@ func handleRequests(configs *config ) {
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/delete_data_where", delete_data_where)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/delete_data_where_worker_contains", delete_data_where_worker_contains)
 
-	
-
 	log.Fatal(http.ListenAndServe(":"+ configs.Instance_Port, myRouter))
 }
+
+
+
+func handleRequests_rsocket(configs *config ) {
+	
+
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_all", get_all_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_rows", get_rows_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_range", get_range_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_slices_worker", get_slices_worker_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_index_manager", update_index_manager)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/load_mem_table", load_mem_table_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/read_wal", read_wal_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_wal", update_wal_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert", insert_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert_worker", insert_worker_rsocket) 
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data", select_data_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data_where_worker_equals", select_data_where_worker_equals_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data_where_worker_contains", select_data_where_worker_contains_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where", delete_data_where_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
+
+	//	rsocket_json_requests.SetTLSConfig("cert.pem", "key.pem")
+
+	_port, _ := strconv.Atoi(configs.Instance_Port)
+	rsocket_json_requests.RequestConfigsServer(_port)
+
+	rsocket_json_requests.ServeCalls()
+}
+
 
 // Nimpha Facing Methods //
 
@@ -150,8 +183,9 @@ func handleRequests(configs *config ) {
 //Core Methods
 func main() {
 	get_wal_disk()
-	//go dump_wal("------------------------------WAL---------------------------------")
-	//go dump_data("------------------------------Data---------------------------------")
+	get_mem_table()
+	go dump_wal("------------------------------WAL---------------------------------")
+	go dump_data("------------------------------Data---------------------------------")
 	configfile, err := os.Open("configfile.json")
     if err != nil {
 		log.Fatal(err)
@@ -160,7 +194,7 @@ func main() {
 	root, err := ioutil.ReadAll(configfile)
 	
 	json.Unmarshal(root, &configs_file)
-	handleRequests(&configs_file)
+	handleRequests_rsocket(&configs_file)
 }
 
 
@@ -197,22 +231,22 @@ func get_mem_table(){
 		fmt.Println(err)
 		log.Fatal(err)
 	}
-	current_index_row := 0
-	for _, row := range mt.Rows {
-		current_document := row.Document
-		fmt.Println(current_document)
-		parsed_document, ok :=  current_document.(map[string] interface{})
-		//err = json.Unmarshal(current_document, &parsed_document)
+	// current_index_row := 0
+	// for _, row := range mt.Rows {
+	// 	current_document := row.Document
+	// 	//fmt.Println(current_document)
+	// 	parsed_document, ok :=  current_document.(map[string] interface{})
+	// 	//err = json.Unmarshal(current_document, &parsed_document)
 
-		if !ok{
-			fmt.Println("ERROR!")
+	// 	if !ok{
+	// 		fmt.Println("ERROR!")
 			
-		}
-		row.Parsed_Document = parsed_document
-		fmt.Println(row.Parsed_Document["name_client"])
-		mt.Rows[current_index_row].Parsed_Document = parsed_document
-		current_index_row ++
-	}
+	// 	}
+	// 	row.Parsed_Document = parsed_document
+	// 	//fmt.Println(row.Parsed_Document["name_client"])
+	// 	mt.Rows[current_index_row].Parsed_Document = parsed_document
+	// 	current_index_row ++
+	// }
 }
 
 func check_index_manager(){}

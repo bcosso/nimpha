@@ -22,7 +22,7 @@ func dump_mt(s string) {
 	file, _ := json.MarshalIndent(mt, "", " ")
 	_ = ioutil.WriteFile("mem_table.json", file, 0644)
    fmt.Println(s)
-   fmt.Println(mt)
+   //fmt.Println(mt)
 }
 
 func dump_wal(s string) {
@@ -31,11 +31,11 @@ func dump_wal(s string) {
 		file, _ := json.MarshalIndent(wal, "", " ")
  		_ = ioutil.WriteFile("wal_file.json", file, 0644)
 		fmt.Println(s)
-		fmt.Println(mt)
+		//fmt.Println(mt)
 	}
 }
 
 func dump_it(s string) {
-	file, _ := json.MarshalIndent(mt, "", " ")
+	file, _ := json.MarshalIndent(it, "", " ")
 	_ = ioutil.WriteFile("index_table.json", file, 0644)
 }
