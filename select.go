@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"github.com/gorilla/mux"
 	"strings"
+	"sql_parser"
+	"reflect"
 	"rsocket_json_requests"
 )
 
@@ -312,6 +314,293 @@ func select_data_where_worker_contains_rsocket(payload interface{}) interface{}{
 
 
 func select_data_rsocket(payload interface{}) interface{}{
+	//if (len(mt.rows) > 
+	var rows []mem_row
+	var result []mem_row
+	payload_content, ok :=  payload.(map[string] interface{})
+	if !ok{
+		fmt.Println("ERROR!")	
+	}
+	table_name := payload_content["table"].(string)
+	where_field := payload_content["where_field"].(string)
+	where_content := payload_content["where_content"].(string)
+	where_operator := payload_content["where_operator"].(string)
+
+	var jsonStr = `
+	{
+	"table":"%s",
+	"where_field":"%s",
+	"where_content":"%s"
+	}
+	`
+
+	for _, ir := range configs_file.Peers {
+		jsonStr = fmt.Sprintf(jsonStr,table_name,where_field, where_content)
+		jsonMap := make(map[string]interface{})
+		json.Unmarshal([]byte(jsonStr), &jsonMap)
+		url := "/" + ir.Name +  "/select_data_where_worker_" + where_operator
+		_port, _ := strconv.Atoi(ir.Port)
+		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
+		
+		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		if (err != nil){
+			fmt.Println(err)
+		}else{
+			if response != nil {
+				intermediate_inteface := response.([]interface{})
+				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+				
+				//fmt.Println(intermediate_inteface)
+				reader := bytes.NewReader(json_rows_bytes)
+
+				dec := json.NewDecoder(reader)
+				dec.DisallowUnknownFields()
+
+				err = dec.Decode(&rows)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				result = append(result, rows...)
+			}
+		}
+	}
+
+	return result
+}
+
+
+func select_data_where_worker_contains_rsocket_sql(payload interface{}) interface{}{
+
+	logic_filters := payload.(Filter)
+	filteredResult := selectFields(logic_filters)
+	return filteredResult
+}
+
+func selectFields(logic_filters Filter) interface {} {
+
+	var rows_result []interface{}
+	for _, row := range mt.Rows {
+		if (applyLogic(row , logic_filters)){
+
+			rowResult := selectField(logic_filters, row)
+			rows_result = append(rows_result, rowResult)
+		}
+
+
+	}
+	return rows_result
+}
+
+func selectField(logic_filters Filter, row mem_row) interface {}{
+
+	if (len(logic_filters.ChildFilters) > 0 && logic_filters.SelectClause == nil){
+		return selectField(logic_filters.ChildFilters[0], row)
+	}else{
+		var cols_result []interface{}
+		var clauseValidation sql_parser.CommandTree
+		for _, selectableObject := range logic_filters.SelectClause {
+			var typedObject interface {}
+			if reflect.TypeOf(selectableObject.SelectableObject) == reflect.TypeOf(clauseValidation){
+				clause := selectableObject.SelectableObject.(sql_parser.CommandTree)
+				typedObject = row.Parsed_Document[clause.Clause].(string)
+			}else{
+				typedObject = selectableObject.SelectableObject
+			}
+
+			cols_result = append(cols_result, typedObject)
+		}
+		
+		return cols_result
+	}
+}
+
+func applyLogic(current_row mem_row, logicObject Filter) bool{
+	result := false
+	previousResult := false
+	previousGate := ""
+	
+	for _, filter := range logicObject.ChildFilters{
+
+		if (reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(filter) && reflect.TypeOf(filter.CommandRight) == reflect.TypeOf(current_row)){
+			// Still work in progress, not working
+			commandFilterLeft := filter.CommandLeft.(Filter)
+			commandFilterRight := filter.CommandRight.(Filter)
+			if len(commandFilterLeft.ChildFilters) > 0{
+				result = applyLogic(current_row, commandFilterLeft)
+			}else if len(commandFilterRight.ChildFilters) > 0{
+				
+			}else{
+				result = GetFilterAndFilter(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+			}
+			
+		}else if (reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(filter)) {
+			commandFilterLeft := filter.CommandLeft.(Filter)
+			if len(commandFilterLeft.ChildFilters) > 0{
+				result = applyLogic(current_row, commandFilterLeft)
+			}else{
+				result = GetFilterAndFilter(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+			}
+		}else if (reflect.TypeOf(filter.CommandRight) == reflect.TypeOf(filter)) {
+			commandFilterRight := filter.CommandRight.(Filter)
+			if len(commandFilterRight.ChildFilters) > 0{
+				result = applyLogic(current_row, commandFilterRight)
+			}else{
+				result = GetFilterAndFilter(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+			}
+		}else{
+			// the above statements should cover cases like "where field IN ()" or some complex subquery logic in where. 
+
+			if filter.CommandLeft == nil {
+				if len(filter.ChildFilters) > 0{
+					result = applyLogic(current_row, filter)
+				}
+			}else{
+				result = GetFilterAndFilter(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+			}
+		}
+
+
+		if previousGate != ""{
+			result = GetComparisonTypeAndCompare(previousGate, result, previousResult)
+		}
+		previousGate = filter.Gate
+		previousResult = result
+	}
+	return result
+}
+
+
+func GetValueFromFilter(contentMemRow interface{}, referenceType interface{}) interface{}{
+	str := ""
+	intVar := 30
+	floatVar := 2.321
+	
+	
+	var result interface {}
+
+	switch (reflect.TypeOf(referenceType)){
+	case reflect.TypeOf(str):
+		result =  strings.Replace(contentMemRow.(string), "'", "", -1)
+		// result =  strings.Replace(result.(string), '"', '')
+		break
+	case reflect.TypeOf(intVar):
+		result, _ =  strconv.Atoi(contentMemRow.(string))
+		break
+	case reflect.TypeOf(floatVar):
+		result, _ =  strconv.ParseFloat(contentMemRow.(string), 64)
+		break
+	default:
+		result = ""
+		break
+
+	}
+
+	return result
+}
+
+
+
+func GetFilterAndFilter(operator string, leftValue interface{}, rightValue interface{}, row mem_row) bool{
+	//if 
+	var filterLeft sql_parser.CommandTree
+	var filterLeftPointer * sql_parser.CommandTree
+	var newLeftValue, newRightValue interface{}
+	var clause sql_parser.CommandTree
+
+
+	if (reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeft) && reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeft)){
+		//It's a join
+		clause = leftValue.(sql_parser.CommandTree)
+		newLeftValue = GetValueFromFilter(row.Parsed_Document[clause.Clause].(string), row.Parsed_Document[clause.Clause].(string))
+
+		//TODO for with Table to join on field
+	} else if (reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeft)) || (reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeftPointer)) {
+		if reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeftPointer){
+			clause = *rightValue.(*sql_parser.CommandTree)
+		}else{
+			clause = rightValue.(sql_parser.CommandTree)
+		}
+		
+		if (clause.Clause == "table_name"){
+			newLeftValue = GetValueFromFilter(row.Table_name, leftValue)
+		}else if (row.Parsed_Document[clause.Clause] != nil){
+			newRightValue = GetValueFromFilter(row.Parsed_Document[clause.Clause].(string), leftValue)
+		}
+		newLeftValue = leftValue
+	}else if (reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeft)) || (reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeftPointer)) {
+		if reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeftPointer){
+			clause = *leftValue.(*sql_parser.CommandTree)
+
+			
+		}else{
+			clause = leftValue.(sql_parser.CommandTree)
+		}
+
+		if (clause.Clause == "table_name"){
+			newLeftValue = GetValueFromFilter(row.Table_name, rightValue)
+		}else if (row.Parsed_Document[clause.Clause] != nil){
+
+			newLeftValue = GetValueFromFilter(row.Parsed_Document[clause.Clause].(string), rightValue)
+		}
+
+		newRightValue = rightValue
+	}else{
+		newLeftValue = leftValue
+		newRightValue = rightValue
+	}
+	switch strings.ToLower(operator){
+	case "equals":
+		return (newLeftValue == newRightValue)
+		break
+	case "bigger":
+		return getBiggerThan(newLeftValue , newRightValue)
+		break
+	default:
+		return false
+		break
+	}
+	return false
+}
+
+func getBiggerThan(value1 interface{}, value2 interface{}) bool{
+
+	intVar := 30
+	floatVar := 2.321
+
+	switch (reflect.TypeOf(value1)){
+
+	case reflect.TypeOf(intVar):
+		return value1.(int) > value2.(int)
+		break
+	case reflect.TypeOf(floatVar):
+		return value1.(float64) > value2.(float64)
+		break
+	default:
+		return value1.(int) > value2.(int)
+		break
+
+	}
+	return false
+}
+
+func GetComparisonTypeAndCompare(gateName string, leftValue bool, rightValue bool) bool{
+	switch strings.ToLower(gateName){
+	case "and":
+		return AndCompare(leftValue, rightValue)
+		break
+	case "or":
+		return OrCompare(leftValue, rightValue)
+		break
+	default:
+		return false
+		break
+	}
+	return false
+}
+
+
+func select_data_rsocket_sql(payload interface{}) interface{}{
 	//if (len(mt.rows) > 
 	var rows []mem_row
 	var result []mem_row

@@ -150,7 +150,7 @@ func handleRequests(configs *config ) {
 
 func handleRequests_rsocket(configs *config ) {
 	
-
+	// Exec("select name_client, client_number, 120 from table1 where client_number = 3 or (name_client = 'teste4' or  client_number = 2 or client_number = 5)")
 	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_all", get_all_rsocket)
 	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_rows", get_rows_rsocket)
 	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_range", get_range_rsocket)
@@ -167,6 +167,7 @@ func handleRequests_rsocket(configs *config ) {
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where", delete_data_where_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
 
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/execute_query", execute_query)
 	//	rsocket_json_requests.SetTLSConfig("cert.pem", "key.pem")
 
 	_port, _ := strconv.Atoi(configs.Instance_Port)
@@ -184,8 +185,8 @@ func handleRequests_rsocket(configs *config ) {
 func main() {
 	get_wal_disk()
 	get_mem_table()
-	go dump_wal("------------------------------WAL---------------------------------")
-	go dump_data("------------------------------Data---------------------------------")
+	// go dump_wal("------------------------------WAL---------------------------------")
+	// go dump_data("------------------------------Data---------------------------------")
 	configfile, err := os.Open("configfile.json")
     if err != nil {
 		log.Fatal(err)

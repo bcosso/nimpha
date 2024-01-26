@@ -74,12 +74,12 @@ func delete_data_where_worker_contains(w http.ResponseWriter, r *http.Request) {
 	var rows_result []mem_row
 	i := len(mt.Rows)
 	rows_result = mt.Rows
-	fmt.Println("----- sizeofI: %d", i)
+	//fmt.Println("----- sizeofI: %d", i)
 	for i > 0 {
 		i--
 		if mt.Rows[i].Table_name == table_name{
 			if strings.Contains(mt.Rows[i].Parsed_Document[where_field].(string), where_content){
-				fmt.Println("----- sizeofI: %d", i)
+				//fmt.Println("----- sizeofI: %d", i)
 				rows_result = remove_index(rows_result, i)
 			}
 		}
@@ -177,13 +177,13 @@ func delete_data_where_worker_contains_rsocket(payload interface{}) interface{} 
 
 	i := len(mt.Rows)
 	rows_result = mt.Rows
-	fmt.Println("----- sizeofI: %d", i)
+	//fmt.Println("----- sizeofI: %d", i)
 	for i > 0 {
 		i--
 		if mt.Rows[i].Table_name == table_name{
 			if strings.Contains(mt.Rows[i].Parsed_Document[where_field].(string), where_content){
 				rows_affected ++
-				fmt.Println("----- sizeofI: %d", i)
+				//fmt.Println("----- sizeofI: %d", i)
 				rows_result = remove_index(rows_result, i)
 			}
 		}
