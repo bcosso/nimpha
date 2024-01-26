@@ -30,7 +30,7 @@ func insert(w http.ResponseWriter, r *http.Request) {
 
     var p interface {}
 	err = dec.Decode(&p)
-	result.Document = p
+	//result.Document = p
 	result.Parsed_Document = p.(map[string]interface{})
 
 	//Check if IndexRow is full. Then create another and append.Otherwise, just append to the mem_table and ++ the counter.
@@ -83,8 +83,8 @@ func insert_worker(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Output-----------")
 	fmt.Println(p)
 
-	result.Document = p[0].Document
-	result.Parsed_Document = p[0].Document.(map[string]interface{})
+	//result.Document = p[0].Document
+	result.Parsed_Document = p[0].Parsed_Document
 	mt.Rows = append(mt.Rows, result)
 
 	fmt.Println(mt)
@@ -120,7 +120,7 @@ func insert_rsocket(payload interface{})  interface{} {
 	fmt.Println(intermediate_inteface)
 	fmt.Println(payload_content)
 
-	result.Document = intermediate_inteface
+	//result.Document = intermediate_inteface
 	result.Parsed_Document = intermediate_inteface
 
 
@@ -197,8 +197,8 @@ func insert_worker_rsocket(payload interface{}) interface{} {
 	fmt.Println("-----------Output-----------")
 	fmt.Println(p)
 
-	result.Document = p[0].Document
-	result.Parsed_Document = p[0].Document.(map[string]interface{})
+	//result.Document = p[0].Document
+	result.Parsed_Document = p[0].Parsed_Document
 	mt.Rows = append(mt.Rows, result)
 
 	//fmt.Println(mt)
