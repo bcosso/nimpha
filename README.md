@@ -28,5 +28,7 @@ TODO:
  - Separate components in the code (refactor)
  - Replication of WAL
  - Replication of data
- - Convert from HTTP to a protocol lower in the OSI model 
+ - ~~Convert from HTTP to a protocol lower in the OSI model~~ Done with RSOCKET
+ - Remove non rsocket communication
+ - refactor code to Golang standard naming convention. Started with snake case but had to change due to Golang standards.
  
