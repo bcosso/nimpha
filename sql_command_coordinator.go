@@ -23,14 +23,14 @@ type SqlClause struct{
 	SelectableObject interface{}
 } 
 
-func Exec(query string){
-	// str1 := `insert into table1 (field1, field2) values (1, '2') `
-	// str1 := `select  table1.campo1, table2.campo2 from table1, table2 where t1 = 'TEST STRING' and table1.productid = table2.productid `
+// func Exec(query string){
+// 	// str1 := `insert into table1 (field1, field2) values (1, '2') `
+// 	// str1 := `select  table1.campo1, table2.campo2 from table1, table2 where t1 = 'TEST STRING' and table1.productid = table2.productid `
 
-	var action sql_parser.ActionExec = ParsingActionExec{}
-	sql_parser.SetAction(action)
-	sql_parser.Execute_parsing_process(query)
-}
+// 	var action sql_parser.ActionExec = ParsingActionExec{}
+// 	sql_parser.SetAction(action)
+// 	sql_parser.Execute_parsing_process(query)
+// }
 
 func execute_query(payload interface{}) interface{}{
 	
@@ -95,6 +95,9 @@ func parseCommandType (clause sql_parser.CommandTree) interface{} {
 	case "int":
 		ret, _ := strconv.Atoi(clause.Clause)
 		return ret
+	case "int64":
+		ret, _ := strconv.Atoi(clause.Clause)
+		return ret
 	case "number":
 		ret, _ := strconv.Atoi(clause.Clause)
 		return ret
@@ -123,8 +126,14 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 		typeToken := strings.ToLower(tree.CommandParts[indexCommand].TypeToken)
 		if 
 		// (typeToken == "field_select_to_show" ) ||
-		(typeToken == "field_filter" ) || 
-		(typeToken == "field" ){
+		(tree.TypeToken == "where_fields") &&
+		((typeToken == "field_filter" ) || 
+		(typeToken == "number" ) || 
+		(typeToken == "string" ) || 
+		(typeToken == "int" ) || 
+		(typeToken == "int64" ) || 
+		(typeToken == "float64" ) || 
+		(typeToken == "field" )){
 		// (typeToken == "TABLE_FROM" )  ||
 		// (typeToken == "FIELD_FILTER" )  ||
 
@@ -181,7 +190,11 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 
 		}else if (typeToken == "operator"){
 
-			lastFilter.Gate = command.ClauseName
+			if strings.ToLower(command.ClauseName) == "and" || strings.ToLower(command.ClauseName) == "or" {
+				lastFilter.Gate = command.ClauseName
+			// }else{ 
+			// 	lastFilter.Operation = tree.CommandParts[indexCommand].ClauseName
+			}
 			// operatorLast = command.ClauseName
 	
 		}else if (typeToken == "string") ||
