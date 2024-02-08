@@ -13,6 +13,7 @@ type Filter struct {
 	CommandLeft  interface{}
 	Operation	 string
 	CommandRight interface{}
+	TableObject	 []SqlClause
 	ChildFilters []Filter
 	SelectClause []SqlClause
 }
@@ -20,6 +21,8 @@ type Filter struct {
 
 type SqlClause struct{
 	Alias string
+	Name string
+	IsSubquery bool
 	SelectableObject interface{}
 } 
 
@@ -42,18 +45,7 @@ func execute_query(payload interface{}) interface{}{
 	query := payload_content["query"].(string)
 	var action sql_parser.ActionExec = ParsingActionExec{}
 	sql_parser.SetAction(action)
-	sql_parser.Execute_parsing_process(query)
-
-
-	return ""
-}
-
-func (internalExec ParsingActionExec) ExecActionFinal(tree sql_parser.CommandTree) {
-	fmt.Println("-----------------------------------------------------------")
-	fmt.Println("CorrespondingFinalActionParsing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-	fmt.Println("-----------------------------------------------------------")
-	fmt.Println(tree)
-
+	tree := sql_parser.Execute_parsing_process(query)
 	filterNew := new(Filter)
 	read_through(tree, "", filterNew)
 
@@ -65,10 +57,30 @@ func (internalExec ParsingActionExec) ExecActionFinal(tree sql_parser.CommandTre
 
 	result := select_data_where_worker_contains_rsocket_sql(*filterNew)
 
+	return result
+}
+
+func (internalExec ParsingActionExec) ExecActionFinal(tree sql_parser.CommandTree) {
 	fmt.Println("-----------------------------------------------------------")
-	fmt.Println("QUERY RESULT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	fmt.Println("CorrespondingFinalActionParsing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	fmt.Println("-----------------------------------------------------------")
-	fmt.Println(result)
+	fmt.Println(tree)
+
+	// filterNew := new(Filter)
+	// read_through(tree, "", filterNew)
+
+
+	// fmt.Println("-----------------------------------------------------------")
+	// fmt.Println("Filter!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	// fmt.Println("-----------------------------------------------------------")
+	// fmt.Println(filterNew)
+
+	// result := select_data_where_worker_contains_rsocket_sql(*filterNew)
+
+	// fmt.Println("-----------------------------------------------------------")
+	// fmt.Println("QUERY RESULT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	// fmt.Println("-----------------------------------------------------------")
+	// fmt.Println(result)
 
 }
 
@@ -152,7 +164,9 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 				
 				if (strings.ToLower(tree.CommandParts[indexCommand + 1].TypeToken) == "operator"){
 					indexCommand ++
-					filterNew.Operation = tree.CommandParts[indexCommand].ClauseName
+					filterNew.Operation = strings.ToLower(tree.CommandParts[indexCommand].ClauseName)
+					fmt.Println("TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT")
+					fmt.Println(filterNew.Operation)
 					indexCommand ++
 					if len(tree.CommandParts[indexCommand].CommandParts) > 0{
 						filterNewChild := new(Filter)
@@ -165,10 +179,6 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 				}
 			}
 
-			// if operatorLast != ""{
-			// 	filterNew.Gate = operatorLast
-			// 	operatorLast = ""
-			// }
 			
 			currentFilter.ChildFilters = append(currentFilter.ChildFilters, *filterNew)
 			lastFilter = &currentFilter.ChildFilters[len(currentFilter.ChildFilters) -1]
@@ -176,17 +186,23 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 			
 
 
-		}else if (typeToken == "table_from" ){
-			filterNew := new(Filter)
+		}else if (typeToken == "table_from" ) || (typeToken == "table_from_command" ){
+			// filterNew := new(Filter)
 			
-			filterNew.Gate = "OR"
-			column := new(sql_parser.CommandTree)
-			column.Clause = "table_name"
-			filterNew.CommandLeft = column
-			filterNew.Operation = "EQUALS"
-			filterNew.CommandRight = tree.CommandParts[indexCommand].Clause
-			currentFilter.ChildFilters = append(currentFilter.ChildFilters, *filterNew)
-			currentFilter.Gate = "AND"
+			// filterNew.Gate = "OR"
+			// column := new(sql_parser.CommandTree)
+			// column.Clause = "table_name"
+			// filterNew.CommandLeft = column
+			// filterNew.Operation = "EQUALS"
+			// filterNew.CommandRight = tree.CommandParts[indexCommand].Clause
+
+			// tableObject := SqlClause{Name: tree.CommandParts[indexCommand].Clause}
+
+			// filterNew.TableObject = append(filterNew.TableObject, tableObject)
+			
+			// currentFilter.ChildFilters = append(currentFilter.ChildFilters, *filterNew)
+			// currentFilter.Gate = "AND"
+
 
 		}else if (typeToken == "operator"){
 
@@ -222,7 +238,17 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 
 			case "from":
 				expected_context = "from"
+				//identify here if it has real table or subquery. If it does habe subquery, I also add this filter to TableObject with the alias
+				IsNotSubquery, alias :=  CheckNodeForTables(command)
+
 				read_through(command, expected_context, filterNew)
+				if !IsNotSubquery {
+					newTableObject := SqlClause{Alias:alias, IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
+					currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
+				}else{
+					newTableObject := SqlClause{Name:alias,IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
+					currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
+				}
 				break
 			case "where":
 				expected_context = "where"
@@ -261,7 +287,7 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 // func eval_select_command()
 
 
-func (internalExec ParsingActionExec) ExecAction(tree sql_parser.CommandTree) {
+func (internalExec ParsingActionExec) ExecAction(tree * sql_parser.CommandTree) {
 	// fmt.Println("-----------------------------------------------------------")
 	// fmt.Println("CorrespondingActionParsing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	// fmt.Println("-----------------------------------------------------------")
@@ -298,3 +324,20 @@ func AndCompare(arg1 bool, arg2 bool) bool{
 func OrCompare(arg1 bool, arg2 bool) bool{
 	return arg1 || arg2
 }
+func CheckNodeForTables(tree sql_parser.CommandTree) (bool, string) {
+	result := false
+	alias := ""
+	for  _, branch := range tree.CommandParts{
+		if strings.ToLower(branch.TypeToken) == "table_from_command" {
+			result = true
+			if branch.Alias != ""{alias = branch.Alias} else { alias = branch.Clause }
+			fmt.Println(alias)
+		}
+		if result != true{
+			if branch.Alias != ""{alias = branch.Alias} else { alias = branch.Clause }
+			fmt.Println(alias)
+		}
+	}
+	return result, alias
+}
+

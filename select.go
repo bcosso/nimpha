@@ -16,6 +16,14 @@ import (
 	"rsocket_json_requests"
 )
 
+type mem_table_queries struct {
+	TableName   string
+	QueryId		int
+	Rows 		interface{}
+}
+var _currentQueryId int = 0
+var _query_temp_tables []mem_table_queries
+
 func get_all(w http.ResponseWriter, r *http.Request){
     fmt.Fprintf(w, "retrieve all data from table")
     fmt.Println("Endpoint Hit: get_all")
@@ -373,8 +381,27 @@ func select_data_rsocket(payload interface{}) interface{}{
 func select_data_where_worker_contains_rsocket_sql(payload interface{}) interface{}{
 
 	logic_filters := payload.(Filter)
-	filteredResult := selectFields(logic_filters)
+	filteredResult := selectFieldsDecoupled2(logic_filters, logic_filters, 0, "")
+	_query_temp_tables = nil
+	_currentQueryId = 0
 	return filteredResult
+}
+
+func selectFieldsNew(logic_filters Filter) interface {} {
+
+	var rows_result []interface{}
+	//In the new situation, I need to go through the query_table. Which Table first?
+	for _, row := range mt.Rows {
+		
+		if (applyLogic(row , logic_filters)){
+
+			rowResult := selectField(logic_filters, row)
+			rows_result = append(rows_result, rowResult)
+		}
+
+
+	}
+	return rows_result
 }
 
 func selectFields(logic_filters Filter) interface {} {
@@ -413,6 +440,214 @@ func selectField(logic_filters Filter, row mem_row) interface {}{
 		
 		return cols_result
 	}
+}
+
+
+func selectFieldsDecoupled(logic_filters Filter) interface {} {
+
+	var rows_result []interface{}
+	for _, filter := range logic_filters.ChildFilters {
+		var tableObject [] mem_table_queries 
+		if len(filter.TableObject) > 0 {
+			//make a hashtable or a map out of it
+			for _, temp_query := range _query_temp_tables {
+				for _, tableFilter := range filter.TableObject{
+					if temp_query.TableName == tableFilter.Name || temp_query.TableName == tableFilter.Alias {
+						tableObject = append(tableObject, temp_query)
+					}
+				}
+			}
+			if len(tableObject) < len(filter.TableObject) {
+				for _, row := range mt.Rows {
+					if row.Table_name == filter.TableObject[0].Name{
+						
+					}
+				}
+			}
+		}else{
+
+			selectFieldsDecoupled(filter)
+		}
+	}
+	return rows_result
+}
+
+func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, indexFilter int, aliasSubquery string) interface {} {
+	var tableResult interface{}
+	futureAliasSubquery:=""
+	// if indexFilter == 0 && (len(logic_filters.TableObject) > 0) && logic_filters.TableObject[0].IsSubquery {
+	if (len(logic_filters.TableObject) > 0) && logic_filters.TableObject[0].IsSubquery {
+		futureAliasSubquery = logic_filters.TableObject[0].Alias
+		if indexFilter == 0 {aliasSubquery = futureAliasSubquery}
+	}
+	if aliasSubquery != "" && futureAliasSubquery == "" { futureAliasSubquery = aliasSubquery}
+	indexFilter++
+
+	for _, filter := range  logic_filters.ChildFilters {
+
+		tableResult = selectFieldsDecoupled2(filter, fullLogicFilters, indexFilter, futureAliasSubquery)
+
+	}
+
+	//If is a select_to_show clause I need to Check the SelectClause and if there is no table, I create one in the in memory qyery
+	if len(logic_filters.ChildFilters) > 0{
+		if (len(logic_filters.ChildFilters[0].SelectClause ) > 0 ) {
+
+			tables := lookForRelatedTablesInFilters2(logic_filters, indexFilter)
+			// filters := lookForRelatedFiltersInFilters(fullLogicFilters, indexFilter)
+			var tableWorking []string 
+
+			if len(tables) > 0 {
+				for _, table := range tables{
+
+					//Check existance in query_objects
+					indexMemTable := isInQueryObject(table)
+					if indexMemTable == -1{
+						//Check existance in (index_ for distributed) mem_table
+						if isInMemTable(table, logic_filters.ChildFilters[0].SelectClause) == false{
+							if reflect.TypeOf(table.SelectableObject) ==  reflect.TypeOf(fullLogicFilters){
+								tableResult = selectFieldsDecoupled2(table.SelectableObject.(Filter), fullLogicFilters, indexFilter, futureAliasSubquery)
+							}else{
+								var columns map[string]interface{}
+								for _, column := range logic_filters.SelectClause{
+									columns[column.Name] = column.SelectableObject
+								}
+								newRow := mem_table_queries{TableName: strconv.Itoa(indexFilter), Rows:columns}
+								_query_temp_tables = append(_query_temp_tables, newRow)
+								tableWorking = append(tableWorking , strconv.Itoa(indexFilter))
+								tableResult = tableWorking
+							} //I need to return the name of the table I'm working, get it in the mem_query and apply filters on the way back. I just insert on the mem query what is according to Filter
+						}else{
+							tableWorking = append(tableWorking , table.Name)
+							tableResult = GetTableSummarize(tableWorking, logic_filters, logic_filters.ChildFilters[0].SelectClause, aliasSubquery)
+						}
+					}else{
+						if ( table.Alias != ""){
+							tableWorking = append(tableWorking , table.Alias)
+						}else{
+							tableWorking = append(tableWorking , table.Name)
+						}
+						
+						tableResult = GetTableSummarize(tableWorking, logic_filters, logic_filters.ChildFilters[0].SelectClause, aliasSubquery)
+					}
+					//if it does not exist anywhere, throw an error
+				}
+
+			}
+		}
+	}
+	
+	return  tableResult
+}
+
+func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause, aliasSubquery string) []mem_table_queries{
+	var tableResult []mem_table_queries
+	var clauseValidation sql_parser.CommandTree
+
+	for _, table := range tables {
+		index := 0
+		for index < len(_query_temp_tables)  {
+			if _query_temp_tables[index].TableName == table{
+				if applyLogic2(_query_temp_tables[index] , filter){
+					columns := make(map[string]interface{})
+
+					for _, column := range selectObject{
+						if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation){
+							clause := column.SelectableObject.(sql_parser.CommandTree)
+							columns[clause.Clause] = make(map[string]interface{})
+							rowColumn := _query_temp_tables[index].Rows.(map[string]interface{})
+							columns[clause.Clause] = rowColumn[clause.Clause]
+						}else{
+							if column.Alias != "" {
+								columns[column.Alias] = make(map[string]interface{})
+								columns[column.Alias] =  column.SelectableObject
+							}else{
+								columns[column.Name] = make(map[string]interface{})
+								columns[column.Name] =  column.SelectableObject
+							}
+						}
+					}
+					if aliasSubquery != ""{
+						table = aliasSubquery
+					}
+					newRow := mem_table_queries{TableName: table, Rows:columns}
+					tableResult = append(tableResult, newRow)
+
+				}
+			}
+			index ++
+		}
+	}
+
+	_query_temp_tables = append(_query_temp_tables, tableResult...)
+
+	return  tableResult
+} 
+
+
+func lookForRelatedTablesInFilters(fullLogicFilters Filter, level int) []SqlClause{
+	var tables []SqlClause
+	for _, filter := range  fullLogicFilters.ChildFilters {
+
+		if len(filter.ChildFilters) > 0{
+			
+			fmt.Println(len(filter.ChildFilters))
+			fmt.Println(filter.ChildFilters)
+			for _, filterChild := range filter.ChildFilters{
+				if len(filterChild.TableObject) > 0{
+					tables = append(tables, filterChild.TableObject...)
+				}
+			}
+		}
+		//Search also in the abstract tree. If  the abstract tree has it, then we should return the rules referent to the subtree in the Filters . 
+		// Maybe implement if the context is  table_from or from, also need to add the alias to it (?)
+
+	}
+	return tables
+}
+
+func lookForRelatedTablesInFilters2(fullLogicFilters Filter, level int) []SqlClause{
+	var tables []SqlClause
+	if len(fullLogicFilters.TableObject) > 0 {
+		tables = append(tables, fullLogicFilters.TableObject...)
+	}
+	return tables
+}
+
+func lookForRelatedFiltersInFilters(fullLogicFilters Filter, level int) []Filter{
+	var filters []Filter
+	for _, filter := range  fullLogicFilters.ChildFilters {
+		if filter.CommandLeft != nil{
+			filters = append(filters, filter)
+		}
+	}
+	return filters
+}
+
+func isInQueryObject(selectableObject SqlClause) int {
+	for index, query := range _query_temp_tables {
+		if query.TableName == selectableObject.Name || query.TableName == selectableObject.Alias{
+			return index
+		}
+	}
+	return -1
+}
+
+func isInMemTable(tableObject SqlClause, selectObject []SqlClause) bool {
+	result := false
+	// var clauseValidation sql_parser.CommandTree
+	for _, row := range mt.Rows {
+		if (row.Table_name == tableObject.Name) || (row.Table_name == tableObject.Alias){
+			name := ""
+			if row.Table_name == tableObject.Name { name = tableObject.Name }else{name = tableObject.Alias}
+			newRow := mem_table_queries{TableName: name, Rows:row.Parsed_Document}
+			_query_temp_tables = append(_query_temp_tables, newRow)
+			result = true
+		}
+	}
+
+	fmt.Println(_query_temp_tables)
+	return result
 }
 
 func applyLogic(current_row mem_row, logicObject Filter) bool{
@@ -553,7 +788,7 @@ func GetFilterAndFilter(operator string, leftValue interface{}, rightValue inter
 	case "equals":
 		return (newLeftValue == newRightValue)
 		break
-	case "bigger":
+	case "bigger_than":
 		return getBiggerThan(newLeftValue , newRightValue)
 		break
 	default:
@@ -654,4 +889,122 @@ func select_data_rsocket_sql(payload interface{}) interface{}{
 	}
 
 	return result
+}
+
+func applyLogic2(current_row mem_table_queries, logicObject Filter) bool{
+	result := false
+	previousResult := false
+	previousGate := ""
+
+
+	for _, filter := range logicObject.ChildFilters{
+
+		if (reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(filter) && reflect.TypeOf(filter.CommandRight) == reflect.TypeOf(current_row)){
+			// Still work in progress, not working
+			commandFilterLeft := filter.CommandLeft.(Filter)
+			commandFilterRight := filter.CommandRight.(Filter)
+			if len(commandFilterLeft.ChildFilters) > 0{
+				result = applyLogic2(current_row, commandFilterLeft)
+			}else if len(commandFilterRight.ChildFilters) > 0{
+				
+			}else{
+				result = GetFilterAndFilter2(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+			}
+			
+		}else if (reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(filter)) {
+			commandFilterLeft := filter.CommandLeft.(Filter)
+			if len(commandFilterLeft.ChildFilters) > 0{
+				result = applyLogic2(current_row, commandFilterLeft)
+			}else{
+				result = GetFilterAndFilter2(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+			}
+		}else if (reflect.TypeOf(filter.CommandRight) == reflect.TypeOf(filter)) {
+			commandFilterRight := filter.CommandRight.(Filter)
+			if len(commandFilterRight.ChildFilters) > 0{
+				result = applyLogic2(current_row, commandFilterRight)
+			}else{
+				result = GetFilterAndFilter2(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+			}
+		}else{
+			// the above statements should cover cases like "where field IN ()" or some complex subquery logic in where. 
+
+			if filter.CommandLeft == nil {
+				if len(filter.ChildFilters) > 0{
+					result = applyLogic2(current_row, filter)
+				}
+			}else{
+				result = GetFilterAndFilter2(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+			}
+		}
+
+		if previousGate != ""{
+			result = GetComparisonTypeAndCompare(previousGate, result, previousResult)
+		}
+		previousGate = filter.Gate
+		previousResult = result
+	}
+	return result
+}
+
+func GetFilterAndFilter2(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) bool{
+	//if 
+	var filterLeft sql_parser.CommandTree
+	var filterLeftPointer * sql_parser.CommandTree
+	var newLeftValue, newRightValue interface{}
+	var clause sql_parser.CommandTree
+	
+	mapRow := row.Rows.(map[string] interface{})
+
+
+	if (reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeft) && reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeft)){
+		//It's a join
+		clause = leftValue.(sql_parser.CommandTree)
+		newLeftValue = GetValueFromFilter(mapRow[clause.Clause].(string), mapRow[clause.Clause].(string))
+
+		//TODO for with Table to join on field
+	} else if (reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeft)) || (reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeftPointer)) {
+		if reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeftPointer){
+			clause = *rightValue.(*sql_parser.CommandTree)
+		}else{
+			clause = rightValue.(sql_parser.CommandTree)
+		}
+		
+		if (clause.Clause == "table_name"){
+			newLeftValue = GetValueFromFilter(row.TableName, leftValue)
+		}else if (mapRow[clause.Clause] != nil){
+			newRightValue = GetValueFromFilter(mapRow[clause.Clause].(string), leftValue)
+		}
+		newLeftValue = leftValue
+	}else if (reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeft)) || (reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeftPointer)) {
+		if reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeftPointer){
+			clause = *leftValue.(*sql_parser.CommandTree)
+
+			
+		}else{
+			clause = leftValue.(sql_parser.CommandTree)
+		}
+
+		if (clause.Clause == "table_name"){
+			newLeftValue = GetValueFromFilter(row.TableName, rightValue)
+		}else if (mapRow[clause.Clause] != nil){
+			newLeftValue = GetValueFromFilter(mapRow[clause.Clause].(string), rightValue)
+		}
+
+		newRightValue = rightValue
+	}else{
+		newLeftValue = leftValue
+		newRightValue = rightValue
+	}
+	switch strings.ToLower(operator){
+	case "equals":
+		return (newLeftValue == newRightValue)
+		break
+	case "bigger_than":
+		return getBiggerThan(newLeftValue , newRightValue)
+		break
+	default:
+		return false
+		break
+	}
+	return false
 }
