@@ -165,8 +165,6 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 				if (strings.ToLower(tree.CommandParts[indexCommand + 1].TypeToken) == "operator"){
 					indexCommand ++
 					filterNew.Operation = strings.ToLower(tree.CommandParts[indexCommand].ClauseName)
-					fmt.Println("TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT")
-					fmt.Println(filterNew.Operation)
 					indexCommand ++
 					if len(tree.CommandParts[indexCommand].CommandParts) > 0{
 						filterNewChild := new(Filter)
@@ -239,16 +237,16 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 			case "from":
 				expected_context = "from"
 				//identify here if it has real table or subquery. If it does habe subquery, I also add this filter to TableObject with the alias
-				IsNotSubquery, alias :=  CheckNodeForTables(command)
+				CheckNodeForTables(command, currentFilter, filterNew)
 
-				read_through(command, expected_context, filterNew)
-				if !IsNotSubquery {
-					newTableObject := SqlClause{Alias:alias, IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
-					currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
-				}else{
-					newTableObject := SqlClause{Name:alias,IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
-					currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
-				}
+				// read_through(command, expected_context, filterNew)
+				// if !IsNotSubquery {
+				// 	newTableObject := SqlClause{Alias:alias, IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
+				// 	currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
+				// }else{
+				// 	newTableObject := SqlClause{Name:alias,IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
+				// 	currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
+				// }
 				break
 			case "where":
 				expected_context = "where"
@@ -324,20 +322,29 @@ func AndCompare(arg1 bool, arg2 bool) bool{
 func OrCompare(arg1 bool, arg2 bool) bool{
 	return arg1 || arg2
 }
-func CheckNodeForTables(tree sql_parser.CommandTree) (bool, string) {
-	result := false
+func CheckNodeForTables(tree sql_parser.CommandTree, currentFilter * Filter, filterNew * Filter ) {
 	alias := ""
 	for  _, branch := range tree.CommandParts{
+		IsNotSubquery := false
 		if strings.ToLower(branch.TypeToken) == "table_from_command" {
-			result = true
-			if branch.Alias != ""{alias = branch.Alias} else { alias = branch.Clause }
+			IsNotSubquery = true
 			fmt.Println(alias)
 		}
-		if result != true{
-			if branch.Alias != ""{alias = branch.Alias} else { alias = branch.Clause }
-			fmt.Println(alias)
+		if branch.Alias != ""{alias = branch.Alias} else { alias = branch.Clause }
+
+		read_through(tree, "from", filterNew)
+		if !IsNotSubquery {
+			newTableObject := SqlClause{Alias:alias, IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
+			currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
+		}else{
+			newTableObject := SqlClause{Name:alias,IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
+			currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
 		}
+		// if result != true{
+		// 	if branch.Alias != ""{alias = branch.Alias} else { alias = branch.Clause }
+		// 	fmt.Println(alias)
+		// }
 	}
-	return result, alias
+	// return result, alias
 }
 
