@@ -17,9 +17,20 @@ import (
 	"rsocket_json_requests"
 )
 
+// relationship := Relationship{TableNameRight: clauseRight.Prefix, ColumnLeft: clauseLeft.Clause, ColumnRight: clauseRight.Clause, IndexInMemQuery:indexRight }
+
+type Relationship struct {
+	TableNameRight   string
+	ColumnLeft   string
+	ColumnRight   string
+	IndexInMemQuery   int
+	RelatedRow * mem_table_queries
+}
+
 type mem_table_queries struct {
 	TableName   string
 	QueryId		int
+	Relationships [] Relationship
 	Rows 		interface{}
 }
 var _currentQueryId int = 0
@@ -381,6 +392,7 @@ func select_data_where_worker_contains_rsocket_sql(payload interface{}) interfac
 	//Distribute here the call to other instances.
 	filteredResult := selectFieldsDecoupled2(logic_filters, logic_filters, 0, "")
 	_query_temp_tables = nil
+	_analyzedFilterList = make(map[string]int)
 	_currentQueryId = 0
 	return filteredResult
 }
@@ -388,7 +400,7 @@ func select_data_where_worker_contains_rsocket_sql(payload interface{}) interfac
 func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, indexFilter int, aliasSubquery string) interface {} {
 	var tableResult []mem_table_queries
 	futureAliasSubquery:=""
-	// if indexFilter == 0 && (len(logic_filters.TableObject) > 0) && logic_filters.TableObject[0].IsSubquery {
+
 	if (len(logic_filters.TableObject) > 0) && logic_filters.TableObject[0].IsSubquery {
 		futureAliasSubquery = logic_filters.TableObject[0].Alias
 		if indexFilter == 0 {aliasSubquery = futureAliasSubquery}
@@ -460,15 +472,19 @@ func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause
 
 			if _query_temp_tables[index].TableName == table{
 
-				if applyLogic2(_query_temp_tables[index] , filter){
+				if applyLogic2(_query_temp_tables[index] , &filter){
 					columns := make(map[string]interface{})
 
 					for _, column := range selectObject{
 						if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation){
 							clause := column.SelectableObject.(sql_parser.CommandTree)
 							columns[clause.Clause] = make(map[string]interface{})
-							rowColumn := _query_temp_tables[index].Rows.(map[string]interface{})
-							columns[clause.Clause] = rowColumn[clause.Clause]
+							rowColumn, found := CheckColumnExistance(_query_temp_tables[index], clause)
+							if found == false{
+								//Change for proper error treatment here.
+								panic("Non existent column")
+							}
+							columns[clause.Clause] = rowColumn
 						}else{
 							if column.Alias != "" {
 								columns[column.Alias] = make(map[string]interface{})
@@ -499,6 +515,23 @@ func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause
 	return  tableResult
 } 
 
+func CheckColumnExistance(row mem_table_queries, clause sql_parser.CommandTree) (interface{}, bool){
+	rowColumn := row.Rows.(map[string]interface{})
+	actualValue, found := rowColumn[clause.Clause]
+	if found == false {
+		for _, relationship := range row.Relationships{
+			rowColumn = (*relationship.RelatedRow).Rows.(map[string]interface{})
+			actualValueRelationship, foundRelationship := rowColumn[clause.Clause]
+			if foundRelationship == true{
+				actualValue = actualValueRelationship
+				found = foundRelationship
+			}
+		}
+	}
+	
+	return actualValue, found
+}
+
 
 func lookForRelatedTablesInFilters(fullLogicFilters Filter, level int) []SqlClause{
 	var tables []SqlClause
@@ -514,9 +547,6 @@ func lookForRelatedTablesInFilters(fullLogicFilters Filter, level int) []SqlClau
 				}
 			}
 		}
-		//Search also in the abstract tree. If  the abstract tree has it, then we should return the rules referent to the subtree in the Filters . 
-		// Maybe implement if the context is  table_from or from, also need to add the alias to it (?)
-
 	}
 	return tables
 }
@@ -547,6 +577,16 @@ func isInQueryObject(selectableObject SqlClause) int {
 	}
 	return -1
 }
+
+func isTableInQueryObject(tableName string) int {
+	for index, query := range _query_temp_tables {
+		if query.TableName == tableName{
+			return index
+		}
+	}
+	return -1
+}
+
 
 func isInMemTable(tableObject SqlClause, selectObject []SqlClause) bool {
 	result := false
@@ -685,38 +725,83 @@ func select_data_rsocket_sql(payload interface{}) interface{}{
 
 	return result
 }
-
-func applyLogic2(current_row mem_table_queries, logicObject Filter) bool{
+var _analyzedFilterList map[string]int
+func applyLogic2(current_row mem_table_queries, logicObject2 * Filter) bool{
 	result := false
 	previousResult := false
 	previousGate := ""
+	var treeReference sql_parser.CommandTree
+	logicObject := *logicObject2
 
 
 	for _, filter := range logicObject.ChildFilters{
 
-		if (reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(filter) && reflect.TypeOf(filter.CommandRight) == reflect.TypeOf(current_row)){
+		if (reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(filter) && reflect.TypeOf(filter.CommandRight) == reflect.TypeOf(filter)){
 			// Still work in progress, not working
+
 			commandFilterLeft := filter.CommandLeft.(Filter)
 			commandFilterRight := filter.CommandRight.(Filter)
 			if len(commandFilterLeft.ChildFilters) > 0{
-				result = applyLogic2(current_row, commandFilterLeft)
+				result = applyLogic2(current_row, &commandFilterLeft)
 			}else if len(commandFilterRight.ChildFilters) > 0{
-				
+				//These two scenarios above have to be detailed.
 			}else{
-				result = GetFilterAndFilter2(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+				//This should be the most common scenario "table1.Id = table2.Id"
+				//Need to execute the join comparisson for the entire table only once
+				//After that, need a method ONLY TO CHECK  
+				if filter.AlreadyConsumed == false{
+					// GetJoinAndJoin(filter.Operation, filter.CommandLeft, filter.CommandRight)
+					filter.AlreadyConsumed = true
+				}
+				
+				// Does this relationship exist?
+				// current_row.Relationships 
+
+				result = CheckRelationshipExistance(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
 			}
 			
-		}else if (reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(filter)) {
+		}else if (reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(treeReference) && reflect.TypeOf(filter.CommandRight) == reflect.TypeOf(treeReference)){
+
+			//After that, need a method ONLY TO CHECK
+			operation := filter.Operation
+			clauseLeft := filter.CommandLeft.(sql_parser.CommandTree)
+			clauseRight := filter.CommandRight.(sql_parser.CommandTree)  
+			_, found := _analyzedFilterList[operation+"_"+clauseLeft.Clause+"_"+clauseRight.Clause]
+			if found == false{
+				
+				if (isTableInQueryObject(clauseLeft.Prefix) > -1 && isTableInQueryObject(clauseRight.Prefix) > -1 ){
+					GetJoinAndJoin(filter.Operation, filter.CommandLeft, filter.CommandRight, &current_row)
+
+					if _analyzedFilterList == nil {
+						newMap := make(map[string]int)
+						newMap[operation+"_"+clauseLeft.Clause+"_"+clauseRight.Clause] = 1
+						_analyzedFilterList = newMap
+					}else{
+						_analyzedFilterList[operation+"_"+clauseLeft.Clause+"_"+clauseRight.Clause] = 1
+					}
+
+					_analyzedFilterList[operation+"_"+clauseLeft.Clause+"_"+clauseRight.Clause] = 1
+					fmt.Println(_query_temp_tables)
+					
+				}
+			}else{//Unoptimized
+				// GetJoinAndJoin(filter.Operation, filter.CommandLeft, filter.CommandRight)
+			}
+			
+			result = CheckRelationshipExistance(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
+			
+			
+		} else if (reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(filter)) {
 			commandFilterLeft := filter.CommandLeft.(Filter)
 			if len(commandFilterLeft.ChildFilters) > 0{
-				result = applyLogic2(current_row, commandFilterLeft)
+				result = applyLogic2(current_row, &commandFilterLeft)
 			}else{
 				result = GetFilterAndFilter2(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
 			}
 		}else if (reflect.TypeOf(filter.CommandRight) == reflect.TypeOf(filter)) {
 			commandFilterRight := filter.CommandRight.(Filter)
 			if len(commandFilterRight.ChildFilters) > 0{
-				result = applyLogic2(current_row, commandFilterRight)
+				result = applyLogic2(current_row, &commandFilterRight)
 			}else{
 				result = GetFilterAndFilter2(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
 			}
@@ -725,7 +810,7 @@ func applyLogic2(current_row mem_table_queries, logicObject Filter) bool{
 
 			if filter.CommandLeft == nil {
 				if len(filter.ChildFilters) > 0{
-					result = applyLogic2(current_row, filter)
+					result = applyLogic2(current_row, &filter)
 				}
 			}else{
 				//if current row has prefix, we need to check in this method if the prefix corresponds to the table name/alias of the commandleft or command right
@@ -743,66 +828,155 @@ func applyLogic2(current_row mem_table_queries, logicObject Filter) bool{
 	return result
 }
 
-func GetFilterAndFilter2(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) bool{
-	//if 
-	var filterLeft sql_parser.CommandTree
-	var filterLeftPointer * sql_parser.CommandTree
-	var newLeftValue, newRightValue interface{}
+func CheckWhichSideContainsColumn(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) (int, sql_parser.CommandTree){
 	var clause sql_parser.CommandTree
+	var filterReference sql_parser.CommandTree
+	var filterReferencePointer * sql_parser.CommandTree
 	
+	if (reflect.TypeOf(leftValue) == reflect.TypeOf(filterReference) && reflect.TypeOf(rightValue) == reflect.TypeOf(filterReference)){
+		//It's a join
+		clause = leftValue.(sql_parser.CommandTree)
+		return 0, clause
+	} else if (reflect.TypeOf(rightValue) == reflect.TypeOf(filterReference)) || (reflect.TypeOf(rightValue) == reflect.TypeOf(filterReferencePointer)) {
+		clause = GetClauseFromValue(rightValue)
+		return 1, clause
+	}else if (reflect.TypeOf(leftValue) == reflect.TypeOf(filterReference)) || (reflect.TypeOf(leftValue) == reflect.TypeOf(filterReferencePointer)) {
+		clause = GetClauseFromValue(leftValue)
+		return 2, clause
+	}
+	
+	return -1, clause
+}
+
+func GetFilterAndFilter2(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) bool{
+ 
+	var newLeftValue, newRightValue interface{}
+	belongsToTable := false
+	resultComparison := false
 	mapRow := row.Rows.(map[string] interface{})
 
+	side, clause := CheckWhichSideContainsColumn(operator, leftValue, rightValue, row)
+	//side = 0 - both, side = 1 - right, side = 2 - left, side = -1 - none 
 
-	if (reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeft) && reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeft)){
+	if (side == 0){
 		//It's a join
 		clause = leftValue.(sql_parser.CommandTree)
 		newLeftValue = GetValueFromFilter(mapRow[clause.Clause].(string), mapRow[clause.Clause].(string))
 
 		//TODO for with Table to join on field
-	} else if (reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeft)) || (reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeftPointer)) {
-		if reflect.TypeOf(rightValue) == reflect.TypeOf(filterLeftPointer){
-			clause = *rightValue.(*sql_parser.CommandTree)
-		}else{
-			clause = rightValue.(sql_parser.CommandTree)
-		}
-
+	} else if (side == 1) {
 		if (clause.Clause == "table_name"){
-			newRightValue = GetValueFromFilter(row.TableName, leftValue)
+			newRightValue = GetValueFromFilter(row.TableName, leftValue) //Not passing here anymore, since table logic is being handled elsewhere. 
 		}else if (mapRow[clause.Clause] != nil){
 			newRightValue = GetValueFromFilter(mapRow[clause.Clause].(string), leftValue)
 		}
 		newLeftValue = leftValue
-	}else if (reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeft)) || (reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeftPointer)) {
-		if reflect.TypeOf(leftValue) == reflect.TypeOf(filterLeftPointer){
-			clause = *leftValue.(*sql_parser.CommandTree)
-		}else{
-			clause = leftValue.(sql_parser.CommandTree)
-		}
+	}else if (side == 2) {
 
-		fmt.Println(clause.Clause)
-		if (clause.Clause == "table_name"){
-			newLeftValue = GetValueFromFilter(row.TableName, rightValue)
+		if (clause.Clause == "table_name"){ 
+			newLeftValue = GetValueFromFilter(row.TableName, rightValue) //Not passing here anymore, since table logic is being handled elsewhere. 
 		}else if (mapRow[clause.Clause] != nil){
 			newLeftValue = GetValueFromFilter(mapRow[clause.Clause].(string), rightValue)
 		}
-		fmt.Println("NEITHER")
-		fmt.Println(mapRow)
 
 		newRightValue = rightValue
 	}else{
+		belongsToTable = true
 		newLeftValue = leftValue
 		newRightValue = rightValue
 	}
+
+	belongsToTable = CheckBelongsToTable(row, clause)
+
 	switch strings.ToLower(operator){
 	case "equals":
-		return (newLeftValue == newRightValue)
+		resultComparison = (newLeftValue == newRightValue)
 		break
 	case "bigger_than":
-		return getBiggerThan(newLeftValue , newRightValue)
+		resultComparison = getBiggerThan(newLeftValue , newRightValue)
 		break
 	default:
-		return false
+		resultComparison = false
 		break
 	}
+	return resultComparison && belongsToTable
+}
+
+func CheckBelongsToTable(row mem_table_queries, clause sql_parser.CommandTree) bool{
+	if clause.Prefix != ""{
+		if clause.Prefix != row.TableName{
+			return false
+		}
+	}
+	
+	return true
+}
+
+
+func GetJoinAndJoin(operator string, leftValue interface{}, rightValue interface{}, current_row * mem_table_queries) {
+	mapRow := (*current_row).Rows.(map[string] interface{})
+	indexLeft := 0
+
+	clauseRight := GetClauseFromValue(rightValue)
+	clauseLeft := GetClauseFromValue(leftValue)
+
+	for indexLeft < len(_query_temp_tables){
+		if _query_temp_tables[indexLeft].TableName == clauseLeft.Prefix{
+			mapRowLeft := _query_temp_tables[indexLeft].Rows.(map[string] interface{})
+			indexRight := 0
+			for indexRight < len(_query_temp_tables){
+				if _query_temp_tables[indexRight].TableName == clauseRight.Prefix{
+					mapRowRight := _query_temp_tables[indexRight].Rows.(map[string] interface{})
+
+					fmt.Println(mapRowRight[clauseRight.Clause])
+					if mapRowLeft[clauseLeft.Clause] == mapRowRight[clauseRight.Clause] {
+						// Could do it with a hash. First doing it with a complex object, unoptimized
+						relationship := Relationship{TableNameRight: clauseRight.Prefix, ColumnLeft: clauseLeft.Clause, ColumnRight: clauseRight.Clause, IndexInMemQuery:indexRight, RelatedRow: &(_query_temp_tables[indexRight]) }
+						_query_temp_tables[indexLeft].Relationships = append(_query_temp_tables[indexLeft].Relationships, relationship)
+						
+						if ((*current_row).TableName == _query_temp_tables[indexLeft].TableName) && mapRow[clauseLeft.Clause] == mapRowLeft[clauseLeft.Clause]{
+							*current_row = _query_temp_tables[indexLeft]
+						}
+						//Add index (or pointer) to join list, so I can find the respective columns of this table in project/summarize. Will create a relationship list on _query_temp_tables. SHould also contain the name of the relationship table. Can be a map
+					}
+				}  
+				indexRight ++
+			}
+			
+		}  
+		indexLeft ++
+	}
+}
+
+func CheckRelationshipExistance(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) bool {
+
+	clauseRight := GetClauseFromValue(rightValue)
+	clauseLeft := GetClauseFromValue(leftValue)
+	mapRow := row.Rows.(map[string] interface{})
+
+	for _, relation := range row.Relationships{
+		if relation.TableNameRight == clauseRight.Prefix{
+			mapRowRight := (*relation.RelatedRow).Rows.(map[string] interface{})
+			if mapRow[clauseLeft.Clause] == mapRowRight[clauseRight.Clause]{
+				return true
+			}
+		}
+	}
+
 	return false
+
+}
+
+func GetClauseFromValue(interfaceValue interface{}) sql_parser.CommandTree{
+
+	var filterReferencePointer * sql_parser.CommandTree
+	var clause sql_parser.CommandTree
+
+	if reflect.TypeOf(interfaceValue) == reflect.TypeOf(filterReferencePointer){
+		clause = *interfaceValue.(*sql_parser.CommandTree)
+	}else{
+		clause = interfaceValue.(sql_parser.CommandTree)
+	}
+	return clause
+
 }

@@ -1,11 +1,77 @@
 {
-"key_id": 1, "mem_row": [
-{"key_id": 1, "table_name": "table2","document": {"name_client" : "teste1", "client_number": "1"}},
-{"key_id": 2, "table_name": "table2","document": {"name_client" : "teste2", "client_number": "2"}},
-{"key_id": 3, "table_name": "table1","document": {"name_client" : "teste3", "client_number": "3"}},
-{"key_id": 4, "table_name": "table1","document": {"name_client" : "teste4", "client_number": "4"}},
-{"key_id": 5, "table_name": "table1","document": {"name_client" : "teste5", "client_number": "5"}},
-{"key_id": 6, "table_name": "table1","document": {"name_client" : "teste6", "client_number": "6"}},
-{"key_id": 7, "table_name": "table1","document": {"name_client" : "teste7", "client_number": "7"}}
-]
+ "key_id": 1,
+ "mem_row": [
+  {
+   "key_id": 1,
+   "table_name": "table2",
+   "Parsed_Document": {
+    "client_number": "1",
+    "name_client": "teste1"
+   }
+  },
+  {
+   "key_id": 2,
+   "table_name": "table2",
+   "Parsed_Document": {
+    "client_number": "2",
+    "name_client": "teste2"
+   }
+  },
+  {
+   "key_id": 3,
+   "table_name": "table1",
+   "Parsed_Document": {
+    "client_number": "3",
+    "name_client": "teste3"
+   }
+  },
+  {
+   "key_id": 4,
+   "table_name": "table1",
+   "Parsed_Document": {
+    "client_number": "4",
+    "name_client": "teste4"
+   }
+  },
+  {
+   "key_id": 5,
+   "table_name": "table1",
+   "Parsed_Document": {
+    "client_number": "5",
+    "name_client": "teste5"
+   }
+  },
+  {
+   "key_id": 6,
+   "table_name": "table1",
+   "Parsed_Document": {
+    "client_number": "6",
+    "name_client": "teste6"
+   }
+  },
+  {
+   "key_id": 7,
+   "table_name": "table1",
+   "Parsed_Document": {
+    "client_number": "7",
+    "name_client": "teste7"
+   }
+  },
+  {
+   "key_id": 8,
+   "table_name": "tableadress",
+   "Parsed_Document": {
+    "client_number": "6",
+    "client_adress": "adress6"
+   }
+  },
+  {
+   "key_id": 9,
+   "table_name": "tableadress",
+   "Parsed_Document": {
+    "client_number": "3",
+    "client_adress": "adress3"
+   }
+  }
+ ]
 }

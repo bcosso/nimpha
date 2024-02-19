@@ -16,6 +16,7 @@ type Filter struct {
 	TableObject	 []SqlClause
 	ChildFilters []Filter
 	SelectClause []SqlClause
+	AlreadyConsumed bool //This flag is meant for joins, so they can me executed only once
 }
 
 
@@ -298,21 +299,6 @@ type ParsingActionExec struct {
 
 func IsInteger(val float64) bool {
     return val == float64(int(val))
-}
-
-func IsEqualsTo(value1 interface{}, value2 interface{}) bool{
-	if (value1 == value2) {
-		return true
-	}
-	return false
-}
-
-
-func IsBiggerThan(value1 float64, value2 float64) bool{
-	if (value1 > value2) {
-		return true
-	}
-	return false
 }
 
 func AndCompare(arg1 bool, arg2 bool) bool{
