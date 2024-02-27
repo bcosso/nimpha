@@ -166,6 +166,7 @@ func handleRequests_rsocket(configs *config ) {
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data_where_worker_contains", select_data_where_worker_contains_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where", delete_data_where_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_table", select_table)
 
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/execute_query", execute_query)
 	//	rsocket_json_requests.SetTLSConfig("cert.pem", "key.pem")

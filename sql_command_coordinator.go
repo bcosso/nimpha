@@ -323,7 +323,8 @@ func CheckNodeForTables(tree sql_parser.CommandTree, currentFilter * Filter, fil
 			newTableObject := SqlClause{Alias:alias, IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
 			currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
 		}else{
-			newTableObject := SqlClause{Name:alias,IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
+			// if branch.
+			newTableObject := SqlClause{Name: branch.Clause, Alias:alias, IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
 			currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
 		}
 		// if result != true{

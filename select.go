@@ -355,7 +355,10 @@ func select_data_rsocket(payload interface{}) interface{}{
 	for _, ir := range configs_file.Peers {
 		jsonStr = fmt.Sprintf(jsonStr,table_name,where_field, where_content)
 		jsonMap := make(map[string]interface{})
-		json.Unmarshal([]byte(jsonStr), &jsonMap)
+		err1 := json.Unmarshal([]byte(jsonStr), &jsonMap)
+		if (err1 != nil){
+			fmt.Println(err1)
+		}
 		url := "/" + ir.Name +  "/select_data_where_worker_" + where_operator
 		_port, _ := strconv.Atoi(ir.Port)
 		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
@@ -418,14 +421,19 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 
 			tables := lookForRelatedTablesInFilters2(logic_filters, indexFilter)
 			var tableWorking []string 
-
+			checkForTablesInNodes(tables, logic_filters)
 			if len(tables) > 0 {
 				for _, table := range tables{
 					//Check existance in query_objects
 					indexMemTable := isInQueryObject(table)
 					if indexMemTable == -1{
 						//Check existance in (index_ for distributed) mem_table
+						//Good place to fetch distributed data
 						if isInMemTable(table, logic_filters.ChildFilters[0].SelectClause) == false{
+							// fmt.Println("#####################################")
+							// fmt.Println(table)
+							// fmt.Println(_query_temp_tables)
+							// fmt.Println("#####################################")
 							if reflect.TypeOf(table.SelectableObject) ==  reflect.TypeOf(fullLogicFilters){
 								tableResult = selectFieldsDecoupled2(table.SelectableObject.(Filter), fullLogicFilters, indexFilter, futureAliasSubquery).([]mem_table_queries)
 							}else{
@@ -439,7 +447,11 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 								tableResult = append(tableResult, newRow)
 							} //I need to return the name of the table I'm working, get it in the mem_query and apply filters on the way back. I just insert on the mem query what is according to Filter
 						}else{
-							tableWorking = append(tableWorking , table.Name)
+							if ( table.Alias != ""){
+								tableWorking = append(tableWorking , table.Alias)
+							}else{
+								tableWorking = append(tableWorking , table.Name)
+							}
 							tableResult = GetTableSummarize(tableWorking, logic_filters, logic_filters.ChildFilters[0].SelectClause, aliasSubquery, indexFilter)
 						}
 					}else{
@@ -532,24 +544,95 @@ func CheckColumnExistance(row mem_table_queries, clause sql_parser.CommandTree) 
 	return actualValue, found
 }
 
+func checkForTablesInNodes(tables []SqlClause, filter Filter){
+	
+	
+	for _, table := range tables {
+		//Search in nodes
+		var jsonStr = `
+		{
+		"table":"%s",
+		"alias":"%s",
+		"filter":%s
+		}
+		`
+		//need to check the safety of doing this in parallel
+		go isInMemTable(table, filter.ChildFilters[0].SelectClause)
+		for _, ir := range configs_file.Peers {
+			if (configs_file.Instance_name != ir.Name){
+				var rows []mem_table_queries
+				jsonFilter, _ := json.Marshal(&filter) 
+				jsonStr = fmt.Sprintf(jsonStr, table.Name , table.Alias ,string(jsonFilter))
+				jsonMap := make(map[string]interface{})
+				err1 := json.Unmarshal([]byte(jsonStr), &jsonMap)
+				if (err1 != nil){
+					fmt.Println(err1)
+				}
+				//New receiving function
+				url := "/" + ir.Name +  "/select_table"
+				_port, _ := strconv.Atoi(ir.Port)
+				rsocket_json_requests.RequestConfigs(ir.Ip, _port)
+				
+				response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
 
-func lookForRelatedTablesInFilters(fullLogicFilters Filter, level int) []SqlClause{
-	var tables []SqlClause
-	for _, filter := range  fullLogicFilters.ChildFilters {
+				if (err != nil){
+					fmt.Println(err)
+				}else{
+					if response != nil {
+						//add to _query_temp_tables
+						intermediate_inteface := response.([]interface{})
+						json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+						
+						//fmt.Println(intermediate_inteface)
+						reader := bytes.NewReader(json_rows_bytes)
 
-		if len(filter.ChildFilters) > 0{
-			
-			fmt.Println(len(filter.ChildFilters))
-			fmt.Println(filter.ChildFilters)
-			for _, filterChild := range filter.ChildFilters{
-				if len(filterChild.TableObject) > 0{
-					tables = append(tables, filterChild.TableObject...)
+						dec := json.NewDecoder(reader)
+						dec.DisallowUnknownFields()
+
+						err = dec.Decode(&rows)
+						if err != nil {
+							log.Fatal(err)
+						}
+						fmt.Println(rows)
+						_query_temp_tables = append(_query_temp_tables, rows...)
+					}
 				}
 			}
 		}
+		
 	}
-	return tables
 }
+
+func select_table(payload interface{}) interface{}{
+
+	payload_content, ok :=  payload.(map[string] interface{})
+	if !ok{
+		fmt.Println("ERROR!")	
+	}
+
+	table_name := payload_content["table"].(string)
+	alias := payload_content["alias"].(string)
+	// filter := payload_content["filter"].(string)
+	
+
+	var rows_result []mem_table_queries
+	for _, row := range mt.Rows {
+		if row.Table_name == table_name{
+
+			// if row.Parsed_Document[where_field] == where_content{
+			if alias != ""{
+				table_name = alias
+			}
+			rowMemQuery := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
+
+			rows_result = append(rows_result, rowMemQuery)
+			// }
+		}
+	}
+
+	return rows_result
+}
+
 
 func lookForRelatedTablesInFilters2(fullLogicFilters Filter, level int) []SqlClause{
 	var tables []SqlClause
@@ -561,7 +644,7 @@ func lookForRelatedTablesInFilters2(fullLogicFilters Filter, level int) []SqlCla
 
 func lookForRelatedFiltersInFilters(fullLogicFilters Filter, level int) []Filter{
 	var filters []Filter
-	for _, filter := range  fullLogicFilters.ChildFilters {
+	for _, filter := range fullLogicFilters.ChildFilters {
 		if filter.CommandLeft != nil{
 			filters = append(filters, filter)
 		}
@@ -591,10 +674,11 @@ func isTableInQueryObject(tableName string) int {
 func isInMemTable(tableObject SqlClause, selectObject []SqlClause) bool {
 	result := false
 	// var clauseValidation sql_parser.CommandTree
+
 	for _, row := range mt.Rows {
 		if (row.Table_name == tableObject.Name) || (row.Table_name == tableObject.Alias){
 			name := ""
-			if row.Table_name == tableObject.Name { name = tableObject.Name }else{name = tableObject.Alias}
+			if (row.Table_name == tableObject.Name) && (tableObject.Alias == "") { name = tableObject.Name }else{name = tableObject.Alias}
 			newRow := mem_table_queries{TableName: name, Rows:row.Parsed_Document}
 			_query_temp_tables = append(_query_temp_tables, newRow)
 			result = true
