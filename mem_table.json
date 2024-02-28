@@ -59,18 +59,18 @@
   },
   {
    "key_id": 8,
-   "table_name": "tableadress",
+   "table_name": "tableaddress",
    "Parsed_Document": {
     "client_number": "6",
-    "client_adress": "adress6"
+    "client_address": "address6"
    }
   },
   {
    "key_id": 9,
-   "table_name": "tableadress",
+   "table_name": "tableaddress",
    "Parsed_Document": {
     "client_number": "3",
-    "client_adress": "adress3"
+    "client_address": "address3"
    }
   }
  ]
