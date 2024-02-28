@@ -12,9 +12,9 @@ import (
 	// "github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"strings"
-	"sql_parser"
+	"github.com/bcosso/sqlparserproject"
+	"github.com/bcosso/rsocket_json_requests"
 	"reflect"
-	"rsocket_json_requests"
 )
 
 // relationship := Relationship{TableNameRight: clauseRight.Prefix, ColumnLeft: clauseLeft.Clause, ColumnRight: clauseRight.Clause, IndexInMemQuery:indexRight }
@@ -267,7 +267,6 @@ func select_data_where_worker_contains(w http.ResponseWriter, r *http.Request) {
 	where_content := r.URL.Query().Get("where_content")
 	//where_operator := r.URL.Query().Get("where_operator") // Method only for = operator. Another one will be created for contains, bigger than and smaller than
 
-
 	var rows_result []mem_row
 	for _, row := range mt.Rows {
 		if row.Table_name == table_name{
@@ -314,7 +313,6 @@ func select_data_where_worker_contains_rsocket(payload interface{}) interface{}{
 	if !ok{
 		fmt.Println("ERROR!")	
 	}
-	fmt.Println("It's called")
 	table_name := payload_content["table"].(string)
 	where_field := payload_content["where_field"].(string)
 	where_content := payload_content["where_content"].(string)
@@ -593,13 +591,11 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter){
 						if err != nil {
 							log.Fatal(err)
 						}
-						fmt.Println(rows)
 						_query_temp_tables = append(_query_temp_tables, rows...)
 					}
 				}
 			}
 		}
-		
 	}
 }
 
@@ -614,7 +610,6 @@ func select_table(payload interface{}) interface{}{
 	alias := payload_content["alias"].(string)
 	// filter := payload_content["filter"].(string)
 	
-
 	var rows_result []mem_table_queries
 	for _, row := range mt.Rows {
 		if row.Table_name == table_name{
@@ -624,7 +619,6 @@ func select_table(payload interface{}) interface{}{
 				table_name = alias
 			}
 			rowMemQuery := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
-
 			rows_result = append(rows_result, rowMemQuery)
 			// }
 		}
@@ -1012,7 +1006,6 @@ func GetJoinAndJoin(operator string, leftValue interface{}, rightValue interface
 				if _query_temp_tables[indexRight].TableName == clauseRight.Prefix{
 					mapRowRight := _query_temp_tables[indexRight].Rows.(map[string] interface{})
 
-					fmt.Println(mapRowRight[clauseRight.Clause])
 					if mapRowLeft[clauseLeft.Clause] == mapRowRight[clauseRight.Clause] {
 						// Could do it with a hash. First doing it with a complex object, unoptimized
 						relationship := Relationship{TableNameRight: clauseRight.Prefix, ColumnLeft: clauseLeft.Clause, ColumnRight: clauseRight.Clause, IndexInMemQuery:indexRight, RelatedRow: &(_query_temp_tables[indexRight]) }

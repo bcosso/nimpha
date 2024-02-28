@@ -1,7 +1,7 @@
 package main
 
 import (
-	"sql_parser"
+	"github.com/bcosso/sqlparserproject"
 	"fmt"
 	"reflect"
 	"strings"

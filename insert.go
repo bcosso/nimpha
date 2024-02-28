@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"strconv"
 	"net/http"
-	"rsocket_json_requests"
+	"github.com/bcosso/rsocket_json_requests"
 )
 
 func insert(w http.ResponseWriter, r *http.Request) {

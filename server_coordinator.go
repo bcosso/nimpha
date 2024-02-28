@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"github.com/gorilla/mux"
 	"net/http"
-	"rsocket_json_requests"
+	"github.com/bcosso/rsocket_json_requests"
 	"strconv"
 )
 
