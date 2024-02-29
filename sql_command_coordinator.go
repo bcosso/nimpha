@@ -31,9 +31,9 @@ type SqlClause struct{
 // 	// str1 := `insert into table1 (field1, field2) values (1, '2') `
 // 	// str1 := `select  table1.campo1, table2.campo2 from table1, table2 where t1 = 'TEST STRING' and table1.productid = table2.productid `
 
-// 	var action sql_parser.ActionExec = ParsingActionExec{}
-// 	sql_parser.SetAction(action)
-// 	sql_parser.Execute_parsing_process(query)
+// 	var action sqlparserproject.ActionExec = ParsingActionExec{}
+// 	sqlparserproject.SetAction(action)
+// 	sqlparserproject.Execute_parsing_process(query)
 // }
 
 func execute_query(payload interface{}) interface{}{
@@ -44,9 +44,9 @@ func execute_query(payload interface{}) interface{}{
 	}
 
 	query := payload_content["query"].(string)
-	var action sql_parser.ActionExec = ParsingActionExec{}
-	sql_parser.SetAction(action)
-	tree := sql_parser.Execute_parsing_process(query)
+	var action sqlparserproject.ActionExec = ParsingActionExec{}
+	sqlparserproject.SetAction(action)
+	tree := sqlparserproject.Execute_parsing_process(query)
 	filterNew := new(Filter)
 	read_through(tree, "", filterNew)
 
@@ -61,7 +61,7 @@ func execute_query(payload interface{}) interface{}{
 	return result
 }
 
-func (internalExec ParsingActionExec) ExecActionFinal(tree sql_parser.CommandTree) {
+func (internalExec ParsingActionExec) ExecActionFinal(tree sqlparserproject.CommandTree) {
 	fmt.Println("-----------------------------------------------------------")
 	fmt.Println("CorrespondingFinalActionParsing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	fmt.Println("-----------------------------------------------------------")
@@ -93,7 +93,7 @@ func return_type(nameType string) reflect.Type{
 	return nil
 }
 
-func parseCommandType (clause sql_parser.CommandTree) interface{} {
+func parseCommandType (clause sqlparserproject.CommandTree) interface{} {
 	typeToken := strings.ToLower(clause.TypeToken)
 	switch typeToken{
 	case "string":
@@ -127,9 +127,9 @@ func parseCommandType (clause sql_parser.CommandTree) interface{} {
 
 var _filter Filter
 
-func read_through(tree sql_parser.CommandTree, expected_context string, currentFilter * Filter){
+func read_through(tree sqlparserproject.CommandTree, expected_context string, currentFilter * Filter){
 
-	var read_later *sql_parser.CommandTree
+	var read_later *sqlparserproject.CommandTree
 	expected_context_next := ""
 	indexCommand := 0
 	// operatorLast := ""
@@ -189,7 +189,7 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 			// filterNew := new(Filter)
 			
 			// filterNew.Gate = "OR"
-			// column := new(sql_parser.CommandTree)
+			// column := new(sqlparserproject.CommandTree)
 			// column.Clause = "table_name"
 			// filterNew.CommandLeft = column
 			// filterNew.Operation = "EQUALS"
@@ -286,7 +286,7 @@ func read_through(tree sql_parser.CommandTree, expected_context string, currentF
 // func eval_select_command()
 
 
-func (internalExec ParsingActionExec) ExecAction(tree * sql_parser.CommandTree) {
+func (internalExec ParsingActionExec) ExecAction(tree * sqlparserproject.CommandTree) {
 	// fmt.Println("-----------------------------------------------------------")
 	// fmt.Println("CorrespondingActionParsing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	// fmt.Println("-----------------------------------------------------------")
@@ -294,7 +294,7 @@ func (internalExec ParsingActionExec) ExecAction(tree * sql_parser.CommandTree) 
 }
 
 type ParsingActionExec struct {
-	sql_parser.ActionExec
+	sqlparserproject.ActionExec
 }
 
 func IsInteger(val float64) bool {
@@ -308,7 +308,7 @@ func AndCompare(arg1 bool, arg2 bool) bool{
 func OrCompare(arg1 bool, arg2 bool) bool{
 	return arg1 || arg2
 }
-func CheckNodeForTables(tree sql_parser.CommandTree, currentFilter * Filter, filterNew * Filter ) {
+func CheckNodeForTables(tree sqlparserproject.CommandTree, currentFilter * Filter, filterNew * Filter ) {
 	alias := ""
 	for  _, branch := range tree.CommandParts{
 		IsNotSubquery := false

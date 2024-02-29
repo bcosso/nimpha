@@ -5,11 +5,9 @@ import (
     "fmt"
 	"log"
 	//"errors"	
-	//"io"
 	"encoding/json"
 	"strconv"
 	"net/http"
-	// "github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"strings"
 	"github.com/bcosso/sqlparserproject"
@@ -428,10 +426,6 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 						//Check existance in (index_ for distributed) mem_table
 						//Good place to fetch distributed data
 						if isInMemTable(table, logic_filters.ChildFilters[0].SelectClause) == false{
-							// fmt.Println("#####################################")
-							// fmt.Println(table)
-							// fmt.Println(_query_temp_tables)
-							// fmt.Println("#####################################")
 							if reflect.TypeOf(table.SelectableObject) ==  reflect.TypeOf(fullLogicFilters){
 								tableResult = selectFieldsDecoupled2(table.SelectableObject.(Filter), fullLogicFilters, indexFilter, futureAliasSubquery).([]mem_table_queries)
 							}else{
@@ -473,9 +467,9 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 // var _query_table_id int = 0
 func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause, aliasSubquery string, indexFilter int) []mem_table_queries{
 	var tableResult []mem_table_queries
-	var clauseValidation sql_parser.CommandTree
+	var clauseValidation sqlparserproject.CommandTree
 	// _query_table_id ++
-
+	fmt.Println("GetTableSummarize")
 	for _, table := range tables {
 		index := 0
 		for index < len(_query_temp_tables)  {
@@ -487,7 +481,7 @@ func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause
 
 					for _, column := range selectObject{
 						if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation){
-							clause := column.SelectableObject.(sql_parser.CommandTree)
+							clause := column.SelectableObject.(sqlparserproject.CommandTree)
 							columns[clause.Clause] = make(map[string]interface{})
 							rowColumn, found := CheckColumnExistance(_query_temp_tables[index], clause)
 							if found == false{
@@ -521,11 +515,11 @@ func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause
 	}
 
 	_query_temp_tables = append(_query_temp_tables, tableResult...)
-
+	fmt.Println("EndGetTableSummarize")
 	return  tableResult
 } 
 
-func CheckColumnExistance(row mem_table_queries, clause sql_parser.CommandTree) (interface{}, bool){
+func CheckColumnExistance(row mem_table_queries, clause sqlparserproject.CommandTree) (interface{}, bool){
 	rowColumn := row.Rows.(map[string]interface{})
 	actualValue, found := rowColumn[clause.Clause]
 	if found == false {
@@ -581,9 +575,7 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter){
 						intermediate_inteface := response.([]interface{})
 						json_rows_bytes, _ := json.Marshal(intermediate_inteface)
 						
-						//fmt.Println(intermediate_inteface)
 						reader := bytes.NewReader(json_rows_bytes)
-
 						dec := json.NewDecoder(reader)
 						dec.DisallowUnknownFields()
 
@@ -614,13 +606,12 @@ func select_table(payload interface{}) interface{}{
 	for _, row := range mt.Rows {
 		if row.Table_name == table_name{
 
-			// if row.Parsed_Document[where_field] == where_content{
+			//Need to apply some logic to filter unecessary data
 			if alias != ""{
 				table_name = alias
 			}
 			rowMemQuery := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
 			rows_result = append(rows_result, rowMemQuery)
-			// }
 		}
 	}
 
@@ -667,7 +658,7 @@ func isTableInQueryObject(tableName string) int {
 
 func isInMemTable(tableObject SqlClause, selectObject []SqlClause) bool {
 	result := false
-	// var clauseValidation sql_parser.CommandTree
+	// var clauseValidation sqlparserproject.CommandTree
 
 	for _, row := range mt.Rows {
 		if (row.Table_name == tableObject.Name) || (row.Table_name == tableObject.Alias){
@@ -679,7 +670,7 @@ func isInMemTable(tableObject SqlClause, selectObject []SqlClause) bool {
 		}
 	}
 
-	fmt.Println(_query_temp_tables)
+	// fmt.Println(_query_temp_tables)
 	return result
 }
 
@@ -688,13 +679,11 @@ func GetValueFromFilter(contentMemRow interface{}, referenceType interface{}) in
 	intVar := 30
 	floatVar := 2.321
 	
-	
 	var result interface {}
 
 	switch (reflect.TypeOf(referenceType)){
 	case reflect.TypeOf(str):
 		result =  strings.Replace(contentMemRow.(string), "'", "", -1)
-		// result =  strings.Replace(result.(string), '"', '')
 		break
 	case reflect.TypeOf(intVar):
 		result, _ =  strconv.Atoi(contentMemRow.(string))
@@ -785,9 +774,7 @@ func select_data_rsocket_sql(payload interface{}) interface{}{
 				intermediate_inteface := response.([]interface{})
 				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
 				
-				//fmt.Println(intermediate_inteface)
 				reader := bytes.NewReader(json_rows_bytes)
-
 				dec := json.NewDecoder(reader)
 				dec.DisallowUnknownFields()
 
@@ -808,7 +795,7 @@ func applyLogic2(current_row mem_table_queries, logicObject2 * Filter) bool{
 	result := false
 	previousResult := false
 	previousGate := ""
-	var treeReference sql_parser.CommandTree
+	var treeReference sqlparserproject.CommandTree
 	logicObject := *logicObject2
 
 
@@ -842,8 +829,8 @@ func applyLogic2(current_row mem_table_queries, logicObject2 * Filter) bool{
 
 			//After that, need a method ONLY TO CHECK
 			operation := filter.Operation
-			clauseLeft := filter.CommandLeft.(sql_parser.CommandTree)
-			clauseRight := filter.CommandRight.(sql_parser.CommandTree)  
+			clauseLeft := filter.CommandLeft.(sqlparserproject.CommandTree)
+			clauseRight := filter.CommandRight.(sqlparserproject.CommandTree)  
 			_, found := _analyzedFilterList[operation+"_"+clauseLeft.Clause+"_"+clauseRight.Clause]
 			if found == false{
 				
@@ -859,7 +846,7 @@ func applyLogic2(current_row mem_table_queries, logicObject2 * Filter) bool{
 					}
 
 					_analyzedFilterList[operation+"_"+clauseLeft.Clause+"_"+clauseRight.Clause] = 1
-					fmt.Println(_query_temp_tables)
+					// fmt.Println(_query_temp_tables)
 					
 				}
 			}else{//Unoptimized
@@ -906,14 +893,14 @@ func applyLogic2(current_row mem_table_queries, logicObject2 * Filter) bool{
 	return result
 }
 
-func CheckWhichSideContainsColumn(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) (int, sql_parser.CommandTree){
-	var clause sql_parser.CommandTree
-	var filterReference sql_parser.CommandTree
-	var filterReferencePointer * sql_parser.CommandTree
+func CheckWhichSideContainsColumn(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) (int, sqlparserproject.CommandTree){
+	var clause sqlparserproject.CommandTree
+	var filterReference sqlparserproject.CommandTree
+	var filterReferencePointer * sqlparserproject.CommandTree
 	
 	if (reflect.TypeOf(leftValue) == reflect.TypeOf(filterReference) && reflect.TypeOf(rightValue) == reflect.TypeOf(filterReference)){
 		//It's a join
-		clause = leftValue.(sql_parser.CommandTree)
+		clause = leftValue.(sqlparserproject.CommandTree)
 		return 0, clause
 	} else if (reflect.TypeOf(rightValue) == reflect.TypeOf(filterReference)) || (reflect.TypeOf(rightValue) == reflect.TypeOf(filterReferencePointer)) {
 		clause = GetClauseFromValue(rightValue)
@@ -938,7 +925,7 @@ func GetFilterAndFilter2(operator string, leftValue interface{}, rightValue inte
 
 	if (side == 0){
 		//It's a join
-		clause = leftValue.(sql_parser.CommandTree)
+		clause = leftValue.(sqlparserproject.CommandTree)
 		newLeftValue = GetValueFromFilter(mapRow[clause.Clause].(string), mapRow[clause.Clause].(string))
 
 		//TODO for with Table to join on field
@@ -980,7 +967,7 @@ func GetFilterAndFilter2(operator string, leftValue interface{}, rightValue inte
 	return resultComparison && belongsToTable
 }
 
-func CheckBelongsToTable(row mem_table_queries, clause sql_parser.CommandTree) bool{
+func CheckBelongsToTable(row mem_table_queries, clause sqlparserproject.CommandTree) bool{
 	if clause.Prefix != ""{
 		if clause.Prefix != row.TableName{
 			return false
@@ -997,6 +984,8 @@ func GetJoinAndJoin(operator string, leftValue interface{}, rightValue interface
 
 	clauseRight := GetClauseFromValue(rightValue)
 	clauseLeft := GetClauseFromValue(leftValue)
+
+	fmt.Println("------------------------------GetJoinAndJoin")
 
 	for indexLeft < len(_query_temp_tables){
 		if _query_temp_tables[indexLeft].TableName == clauseLeft.Prefix{
@@ -1023,6 +1012,7 @@ func GetJoinAndJoin(operator string, leftValue interface{}, rightValue interface
 		}  
 		indexLeft ++
 	}
+	fmt.Println("ENDGetJoinAndJoin--------------------------------------------")
 }
 
 func CheckRelationshipExistance(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) bool {
@@ -1041,18 +1031,17 @@ func CheckRelationshipExistance(operator string, leftValue interface{}, rightVal
 	}
 
 	return false
-
 }
 
-func GetClauseFromValue(interfaceValue interface{}) sql_parser.CommandTree{
+func GetClauseFromValue(interfaceValue interface{}) sqlparserproject.CommandTree{
 
-	var filterReferencePointer * sql_parser.CommandTree
-	var clause sql_parser.CommandTree
+	var filterReferencePointer * sqlparserproject.CommandTree
+	var clause sqlparserproject.CommandTree
 
 	if reflect.TypeOf(interfaceValue) == reflect.TypeOf(filterReferencePointer){
-		clause = *interfaceValue.(*sql_parser.CommandTree)
+		clause = *interfaceValue.(*sqlparserproject.CommandTree)
 	}else{
-		clause = interfaceValue.(sql_parser.CommandTree)
+		clause = interfaceValue.(sqlparserproject.CommandTree)
 	}
 	return clause
 
