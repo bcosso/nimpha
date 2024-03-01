@@ -25,6 +25,13 @@ type Relationship struct {
 	RelatedRow * mem_table_queries
 }
 
+type mem_query_collection struct{
+	TableName string
+	TableContent []mem_table_queries
+}
+
+var _query map[string] []mem_table_queries
+
 type mem_table_queries struct {
 	TableName   string
 	QueryId		int
@@ -32,7 +39,7 @@ type mem_table_queries struct {
 	Rows 		interface{}
 }
 var _currentQueryId int = 0
-var _query_temp_tables []mem_table_queries
+// var _query_temp_tables []mem_table_queries
 
 func get_all(w http.ResponseWriter, r *http.Request){
     fmt.Fprintf(w, "retrieve all data from table")
@@ -367,7 +374,6 @@ func select_data_rsocket(payload interface{}) interface{}{
 				intermediate_inteface := response.([]interface{})
 				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
 				
-				//fmt.Println(intermediate_inteface)
 				reader := bytes.NewReader(json_rows_bytes)
 
 				dec := json.NewDecoder(reader)
@@ -388,11 +394,14 @@ func select_data_rsocket(payload interface{}) interface{}{
 
 func select_data_where_worker_contains_rsocket_sql(payload interface{}) interface{}{
 	logic_filters := payload.(Filter)
+	_query = nil
+	_query = make(map[string] []mem_table_queries) 
 	//Distribute here the call to other instances.
 	filteredResult := selectFieldsDecoupled2(logic_filters, logic_filters, 0, "")
-	_query_temp_tables = nil
+	// _query_temp_tables = nil
 	_analyzedFilterList = make(map[string]int)
 	_currentQueryId = 0
+
 	return filteredResult
 }
 
@@ -421,8 +430,8 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 			if len(tables) > 0 {
 				for _, table := range tables{
 					//Check existance in query_objects
-					indexMemTable := isInQueryObject(table)
-					if indexMemTable == -1{
+					foundMemTable := isInQueryObject(table)
+					if !foundMemTable {
 						//Check existance in (index_ for distributed) mem_table
 						//Good place to fetch distributed data
 						if isInMemTable(table, logic_filters.ChildFilters[0].SelectClause) == false{
@@ -434,7 +443,10 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 									columns[column.Name] = column.SelectableObject
 								}
 								newRow := mem_table_queries{TableName: strconv.Itoa(indexFilter), Rows:columns}
-								_query_temp_tables = append(_query_temp_tables, newRow)
+
+								_query[strconv.Itoa(indexFilter)] = append(_query[strconv.Itoa(indexFilter)], newRow)
+
+
 								tableWorking = append(tableWorking , strconv.Itoa(indexFilter))
 								tableResult = append(tableResult, newRow)
 							} //I need to return the name of the table I'm working, get it in the mem_query and apply filters on the way back. I just insert on the mem query what is according to Filter
@@ -468,54 +480,53 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause, aliasSubquery string, indexFilter int) []mem_table_queries{
 	var tableResult []mem_table_queries
 	var clauseValidation sqlparserproject.CommandTree
-	// _query_table_id ++
-	fmt.Println("GetTableSummarize")
-	for _, table := range tables {
-		index := 0
-		for index < len(_query_temp_tables)  {
+	tableWrite := ""
 
-			if _query_temp_tables[index].TableName == table{
-
-				if applyLogic2(_query_temp_tables[index] , &filter){
-					columns := make(map[string]interface{})
-
-					for _, column := range selectObject{
-						if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation){
-							clause := column.SelectableObject.(sqlparserproject.CommandTree)
-							columns[clause.Clause] = make(map[string]interface{})
-							rowColumn, found := CheckColumnExistance(_query_temp_tables[index], clause)
-							if found == false{
-								//Change for proper error treatment here.
-								panic("Non existent column")
-							}
-							columns[clause.Clause] = rowColumn
-						}else{
-							if column.Alias != "" {
-								columns[column.Alias] = make(map[string]interface{})
-								columns[column.Alias] =  column.SelectableObject
-							}else{
-								columns[column.Name] = make(map[string]interface{})
-								columns[column.Name] =  column.SelectableObject
-							}
-						}
-					}
-					tableWrite := ""
-					if aliasSubquery != ""{
-						tableWrite = aliasSubquery
-					}else{
-						tableWrite = strconv.Itoa(indexFilter)
-					}
-					newRow := mem_table_queries{TableName: tableWrite, Rows:columns}
-					tableResult = append(tableResult, newRow)
-
-				}
-			}
-			index ++
-		}
+	if aliasSubquery != ""{
+		tableWrite = aliasSubquery
+	}else{
+		tableWrite = strconv.Itoa(indexFilter)
 	}
 
-	_query_temp_tables = append(_query_temp_tables, tableResult...)
-	fmt.Println("EndGetTableSummarize")
+	for _, table := range tables {
+		index := 0
+		for index < len(_query[table])  {
+			if applyLogic2(_query[table][index] , &filter){
+				columns := make(map[string]interface{})
+
+				for _, column := range selectObject{
+					if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation){
+						clause := column.SelectableObject.(sqlparserproject.CommandTree)
+						columns[clause.Clause] = make(map[string]interface{})
+						rowColumn, found := CheckColumnExistance(_query[table][index], clause)
+						if found == false{
+							//Change for proper error treatment here.
+							panic("Non existent column")
+						}
+						columns[clause.Clause] = rowColumn
+					}else{
+						if column.Alias != "" {
+							columns[column.Alias] = make(map[string]interface{})
+							columns[column.Alias] =  column.SelectableObject
+						}else{
+							columns[column.Name] = make(map[string]interface{})
+							columns[column.Name] =  column.SelectableObject
+						}
+					}
+				}
+
+				newRow := mem_table_queries{TableName: tableWrite, Rows:columns}
+				tableResult = append(tableResult, newRow)
+
+			}
+			
+			index ++
+		}
+
+		_query[tableWrite] = append(_query[tableWrite], tableResult...)
+		
+	}
+
 	return  tableResult
 } 
 
@@ -583,7 +594,12 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter){
 						if err != nil {
 							log.Fatal(err)
 						}
-						_query_temp_tables = append(_query_temp_tables, rows...)
+						tableName := table.Name
+						if table.Alias != ""{
+							tableName = table.Alias
+						}
+
+						_query[tableName] = append(_query[tableName], rows...)
 					}
 				}
 			}
@@ -637,22 +653,16 @@ func lookForRelatedFiltersInFilters(fullLogicFilters Filter, level int) []Filter
 	return filters
 }
 
-func isInQueryObject(selectableObject SqlClause) int {
-	for index, query := range _query_temp_tables {
-		if query.TableName == selectableObject.Name || query.TableName == selectableObject.Alias{
-			return index
-		}
-	}
-	return -1
+func isInQueryObject(selectableObject SqlClause) bool {
+	_, found := _query[selectableObject.Name]
+	_, foundALIAS := _query[selectableObject.Alias]
+
+	return found || foundALIAS
 }
 
-func isTableInQueryObject(tableName string) int {
-	for index, query := range _query_temp_tables {
-		if query.TableName == tableName{
-			return index
-		}
-	}
-	return -1
+func isTableInQueryObject(tableName string) bool {
+	_, found := _query[tableName]
+	return found
 }
 
 
@@ -665,12 +675,11 @@ func isInMemTable(tableObject SqlClause, selectObject []SqlClause) bool {
 			name := ""
 			if (row.Table_name == tableObject.Name) && (tableObject.Alias == "") { name = tableObject.Name }else{name = tableObject.Alias}
 			newRow := mem_table_queries{TableName: name, Rows:row.Parsed_Document}
-			_query_temp_tables = append(_query_temp_tables, newRow)
+			_query[name] = append(_query[name], newRow)
 			result = true
 		}
 	}
 
-	// fmt.Println(_query_temp_tables)
 	return result
 }
 
@@ -738,7 +747,7 @@ func GetComparisonTypeAndCompare(gateName string, leftValue bool, rightValue boo
 
 
 func select_data_rsocket_sql(payload interface{}) interface{}{
-	//if (len(mt.rows) > 
+
 	var rows []mem_row
 	var result []mem_row
 	payload_content, ok :=  payload.(map[string] interface{})
@@ -834,7 +843,7 @@ func applyLogic2(current_row mem_table_queries, logicObject2 * Filter) bool{
 			_, found := _analyzedFilterList[operation+"_"+clauseLeft.Clause+"_"+clauseRight.Clause]
 			if found == false{
 				
-				if (isTableInQueryObject(clauseLeft.Prefix) > -1 && isTableInQueryObject(clauseRight.Prefix) > -1 ){
+				if (isTableInQueryObject(clauseLeft.Prefix) && isTableInQueryObject(clauseRight.Prefix) ){
 					GetJoinAndJoin(filter.Operation, filter.CommandLeft, filter.CommandRight, &current_row)
 
 					if _analyzedFilterList == nil {
@@ -846,7 +855,6 @@ func applyLogic2(current_row mem_table_queries, logicObject2 * Filter) bool{
 					}
 
 					_analyzedFilterList[operation+"_"+clauseLeft.Clause+"_"+clauseRight.Clause] = 1
-					// fmt.Println(_query_temp_tables)
 					
 				}
 			}else{//Unoptimized
@@ -985,34 +993,31 @@ func GetJoinAndJoin(operator string, leftValue interface{}, rightValue interface
 	clauseRight := GetClauseFromValue(rightValue)
 	clauseLeft := GetClauseFromValue(leftValue)
 
-	fmt.Println("------------------------------GetJoinAndJoin")
-
-	for indexLeft < len(_query_temp_tables){
-		if _query_temp_tables[indexLeft].TableName == clauseLeft.Prefix{
-			mapRowLeft := _query_temp_tables[indexLeft].Rows.(map[string] interface{})
-			indexRight := 0
-			for indexRight < len(_query_temp_tables){
-				if _query_temp_tables[indexRight].TableName == clauseRight.Prefix{
-					mapRowRight := _query_temp_tables[indexRight].Rows.(map[string] interface{})
-
-					if mapRowLeft[clauseLeft.Clause] == mapRowRight[clauseRight.Clause] {
-						// Could do it with a hash. First doing it with a complex object, unoptimized
-						relationship := Relationship{TableNameRight: clauseRight.Prefix, ColumnLeft: clauseLeft.Clause, ColumnRight: clauseRight.Clause, IndexInMemQuery:indexRight, RelatedRow: &(_query_temp_tables[indexRight]) }
-						_query_temp_tables[indexLeft].Relationships = append(_query_temp_tables[indexLeft].Relationships, relationship)
-						
-						if ((*current_row).TableName == _query_temp_tables[indexLeft].TableName) && mapRow[clauseLeft.Clause] == mapRowLeft[clauseLeft.Clause]{
-							*current_row = _query_temp_tables[indexLeft]
-						}
-						//Add index (or pointer) to join list, so I can find the respective columns of this table in project/summarize. Will create a relationship list on _query_temp_tables. SHould also contain the name of the relationship table. Can be a map
-					}
-				}  
-				indexRight ++
-			}
+	for indexLeft < len(_query[clauseLeft.Prefix]){
+		
+		mapRowLeft := _query[clauseLeft.Prefix][indexLeft].Rows.(map[string] interface{})
+		indexRight := 0
+		for indexRight < len(_query[clauseRight.Prefix]){
 			
-		}  
+				mapRowRight := _query[clauseRight.Prefix][indexRight].Rows.(map[string] interface{})
+
+				if mapRowLeft[clauseLeft.Clause] == mapRowRight[clauseRight.Clause] {
+					// Could do it with a hash. First doing it with a complex object, unoptimized
+					relationship := Relationship{TableNameRight: clauseRight.Prefix, ColumnLeft: clauseLeft.Clause, ColumnRight: clauseRight.Clause, IndexInMemQuery:indexRight, RelatedRow: &(_query[clauseRight.Prefix][indexRight]) }
+					
+					_query[clauseLeft.Prefix][indexLeft].Relationships = append(_query[clauseLeft.Prefix][indexLeft].Relationships, relationship)
+					
+					if ((*current_row).TableName == _query[clauseLeft.Prefix][indexLeft].TableName) && mapRow[clauseLeft.Clause] == mapRowLeft[clauseLeft.Clause]{
+						*current_row = _query[clauseLeft.Prefix][indexLeft]
+					}
+					//Add index (or pointer) to join list, so I can find the respective columns of this table in project/summarize. Will create a relationship list on _query_temp_tables. SHould also contain the name of the relationship table. Can be a map
+				}
+			
+			indexRight ++
+		}
+		
 		indexLeft ++
 	}
-	fmt.Println("ENDGetJoinAndJoin--------------------------------------------")
 }
 
 func CheckRelationshipExistance(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) bool {
