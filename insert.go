@@ -129,7 +129,11 @@ func insert_rsocket(payload interface{})  interface{} {
 	//create keep alive
 	//aftter that, create method to update INDEX TABLES through the servers and create WRITE AHEAD LOG to be shared among the servers and order the indexes according to the request.
 
+	
 	coll = append(coll, result)
+	//Need to add multiple sharding strategies: per table, per range and per alphabetical order.  
+	//Add eventual consistency and replication:
+	//Replication triggered at the same time to a different node in either eventual consistency or strong consistency
 	index_it := get_wal_rsocket(&coll)
 	index_row := it.Index_rows[index_it] 
 

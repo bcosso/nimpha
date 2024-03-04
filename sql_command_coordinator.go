@@ -125,7 +125,6 @@ func parseCommandType (clause sqlparserproject.CommandTree) interface{} {
 	return ""
 }
 
-var _filter Filter
 
 func read_through(tree sqlparserproject.CommandTree, expected_context string, currentFilter * Filter){
 
