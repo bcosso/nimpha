@@ -1,7 +1,7 @@
 package main
 
 import (
-
+	"bytes"
     "fmt"
 	"log"
 	// "errors"	
@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/mux"
 	"net/http"
 	"github.com/bcosso/rsocket_json_requests"
+	"reflect"
 	"strconv"
 )
 
@@ -21,20 +22,38 @@ type config struct {
 	Peers   []peers `json:"peers"`
 	Number_Replicas string `json:"number_replicas"`
 	Max_Heap_Size string `json:"max_heap_size"`
-	Instance_name string `json:"instance_name"`
+	Instance_ip   string `json:"instance_ip"`
+	Instance_name   string `json:"instance_name"`
 	Instance_Port string `json:"instance_port"`
+	//RANGE, ALPHABETICAL, TABLE
+	ShardingType string `json:sharding_type`
+	ShardingColumn string `json:sharding_column`
+	ShardingGroup []ShardGroup `json:sharding_group`
+	ShardingStrategy []ShardStrategy `json:sharding_strategy`
 }
 
 type peers struct {
 	Ip string `json:"ip"`
 	Name string `json:"name"`
 	Port string `json:"port"`
-
+	Replicas   []peers `json:"replicas"`
 }
 
+type ShardStrategy struct {
+	//RANGE, ALPHABETICAL, TABLE
+	From string `json:"from"`
+	To string `json:"to"`
+	ShardingGroupId string `json:"sharding_group_id"`
+}
+
+type ShardGroup struct{
+	ShardingGroupId string `json:"sharding_group_id"`
+	Replicas   []peers `json:"replicas"`
+}
 
 type index_table struct {
 	Index_id   int `json:"index_id"`
+	Key_id  int `json:"key_id"`
 	Index_WAL int  `json:"index_wal"`
 	Latest_Node_Insert int  `json:"latest_node_isert"`
 	Index_rows   []index_row `json:"index_row"`
@@ -72,7 +91,13 @@ type wal_operation struct {
 	Key_id   int `json:"key_id"`
 	Node_name string `json:"node_name"`
 	Node_index int `json:"node_index"`
+	InstancesToUpdate []ActiveInstances `json:"active_instances"`
 	Rows []mem_row `json:"mem_row"`
+	Status bool `json:"status"`
+}
+type ActiveInstances struct {
+	InstanceName string `json:"instance_name"`
+	Status bool `json:"status"`
 }
 
 var it index_table =  get_index_table()
@@ -135,8 +160,6 @@ func handleRequests(configs *config ) {
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/load_mem_table", load_mem_table)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/read_wal", read_wal)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/update_wal", update_wal)
-	myRouter.HandleFunc("/"+ configs.Instance_name + "/insert", insert)
-	myRouter.HandleFunc("/"+ configs.Instance_name + "/insert_worker", insert_worker) 
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data", select_data)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data_where_worker_equals", select_data_where_worker_equals)
 	myRouter.HandleFunc("/"+ configs.Instance_name + "/select_data_where_worker_contains", select_data_where_worker_contains)
@@ -160,15 +183,26 @@ func handleRequests_rsocket(configs *config ) {
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/read_wal", read_wal_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_wal", update_wal_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert", insert_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert_worker", insert_worker_rsocket) 
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert_worker", insertWorker) 
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert_worker_rsocket", insert_worker_rsocket) 
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data", select_data_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data_where_worker_equals", select_data_where_worker_equals_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_data_where_worker_contains", select_data_where_worker_contains_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where", delete_data_where_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/select_table", select_table)
-
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/execute_query", execute_query)
+
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/insert_data", insertData)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/read_wal_strategy", read_wal_strategy_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_wal_new", UpdateWal) 
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_successful_nodes_wal", UpdateSuccessfulNodesWal) 
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/trigger_recover_data_nodes", TriggerRecoverDataInNodes)
+	// 
+	// TriggerRecoverDataInNodes
+
+
+
 	//	rsocket_json_requests.SetTLSConfig("cert.pem", "key.pem")
 
 	_port, _ := strconv.Atoi(configs.Instance_Port)
@@ -259,3 +293,133 @@ func update_index_manager(w http.ResponseWriter, r *http.Request){
 }
 
 
+func GetParsedDocumentToMemRow(payload interface{}) (mem_row, interface{}){
+
+	payload_content := make(map[string]interface{})
+	var myString string 
+	if (reflect.TypeOf(myString) == reflect.TypeOf(payload)){
+		myString = payload.(string)
+		json.Unmarshal([]byte(myString), &payload_content)
+	}else if reflect.TypeOf(payload_content) == reflect.TypeOf(payload){
+		payload_content = payload.(map[string]interface{})
+	}
+	
+	var ii []byte
+
+    var p []mem_row
+	intermediate_inteface := payload_content["body"]
+	if (intermediate_inteface == nil){
+		intermediate_inteface = payload
+	}
+	fmt.Println("+++++++++++++++++++++++++++++")
+	fmt.Println(intermediate_inteface)
+
+	if reflect.TypeOf(myString) == reflect.TypeOf(intermediate_inteface){
+		
+		ii = []byte(intermediate_inteface.(string))
+		fmt.Println("000000000000000000000000000")
+		err := json.Unmarshal(ii, &p)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println("YES, THIS ONE")
+		}
+		
+		fmt.Println("-----------Output-----------")
+		fmt.Println(p)
+	
+	}else if (reflect.TypeOf(payload_content) == reflect.TypeOf(intermediate_inteface)){
+		fmt.Println("2222222222222222222222222")
+		var p_result mem_row
+		json_rows_bytes, err1 := json.Marshal(intermediate_inteface.(map[string]interface{}))
+		if err1 != nil {
+			fmt.Println(err1)
+			fmt.Println("YES, THIS first ONE")
+		}
+
+		err := json.Unmarshal(json_rows_bytes, &p_result)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println("YES, THIS ONE")
+		}
+		
+		fmt.Println("-----------Output-----------")
+		fmt.Println(p_result)
+
+		return p_result, intermediate_inteface
+	}else{	
+		fmt.Println("11111111111111111")
+
+		json_rows_bytes, err1 := json.Marshal(intermediate_inteface.([]interface{}))
+		if err1 != nil {
+			fmt.Println(err1)
+			fmt.Println("YES, THIS first ONE")
+		}
+
+		err := json.Unmarshal(json_rows_bytes, &p)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println("YES, THIS ONE")
+		}
+		
+		fmt.Println("-----------Output-----------")
+		fmt.Println(p)
+	}
+
+
+	
+
+	fmt.Println("+++++++++++++++++++++++++++++")
+	fmt.Println(intermediate_inteface)
+	// reader := bytes.NewReader(json_rows_bytes)
+
+	// dec := json.NewDecoder(reader)
+	// dec.DisallowUnknownFields()
+	
+	
+
+
+	// err := dec.Decode(&p)
+
+
+
+	//result.Document = p[0].Document
+	
+	return p[0], intermediate_inteface
+}
+
+
+func GetInstanceList(payload interface{}) ([]peers){
+	var result []peers
+	payload_content := make(map[string]interface{})
+	var myString string 
+	if (reflect.TypeOf(myString) == reflect.TypeOf(payload)){
+		myString = payload.(string)
+		json.Unmarshal([]byte(myString), &payload_content)
+	}else if reflect.TypeOf(payload_content) == reflect.TypeOf(payload){
+		payload_content = payload.(map[string]interface{})
+	}
+
+	intermediate_inteface := payload_content["instance_list"]
+	json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+	
+	fmt.Println(intermediate_inteface)
+	reader := bytes.NewReader(json_rows_bytes)
+
+	dec := json.NewDecoder(reader)
+	dec.DisallowUnknownFields()	
+	err := dec.Decode(&result)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return result
+}
+
+func GetPeerByInstanceName(instanceName string) peers{
+	var emptyPeer peers
+	for _, peer := range configs_file.Peers{
+		if peer.Name == instanceName{
+			return peer
+		}
+	}
+	return emptyPeer
+}

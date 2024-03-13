@@ -568,6 +568,9 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx * map[string] 
 		`
 		//need to check the safety of doing this in parallel
 		isInMemTable(table, filter.ChildFilters[0].SelectClause, ctx)
+		if (configs_file.ShardingType == "" ){
+			return
+		}
 		for _, ir := range configs_file.Peers {
 			if (configs_file.Instance_name != ir.Name){
 				var rows []mem_table_queries

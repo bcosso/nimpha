@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"net/http"
 	"github.com/bcosso/rsocket_json_requests"
+	"strings"
+	// "sync"
+	"time"
 )
 
 
@@ -412,4 +415,299 @@ func get_wal_rsocket(data_post * []mem_row ) int {
 	return iconv
 
 	//fmt.Fprintf(w, strconv.Itoa(index_row.Current_index))
+}
+
+func GetNextNodesToInsertAndWriteWal(data_post * []mem_row ) {
+
+	index_row := it.Index_rows[it.Index_WAL]
+	json_data, err := json.Marshal(data_post)
+
+    if err != nil {
+        log.Fatal(err)
+	}
+
+	var param interface{}
+	param = map[string]interface{}{
+		"body": string(json_data),
+	}
+
+	jsonParam, _ := json.Marshal(param)
+	fmt.Println(string(jsonParam))
+    if err != nil {
+        log.Fatal(err)
+	}
+	
+	_port, _ := strconv.Atoi(index_row.Instance_port)
+	rsocket_json_requests.RequestConfigs(index_row.Instance_ip, _port)
+	_, err = rsocket_json_requests.RequestJSON("/" + index_row.Instance_name +  "/read_wal_strategy", string(jsonParam))
+
+
+	if err != nil {
+		log.Fatal(err)
+		fmt.Println("err::::::") 
+	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+func read_wal_strategy_rsocket(payload interface{})  interface{} {
+	
+	p, intermediate_inteface := GetParsedDocumentToMemRow(payload)
+	//Check persistence of it (to ensure up to date Index_id everywhere in the cluster)
+	it.Index_id ++
+	p.Key_id = it.Index_id
+	fmt.Println(p)
+	var replicationPoints [] peers
+
+	
+	if strings.ToLower(configs_file.ShardingType) == "table"{
+		replicationPoints = GetShardingStrategy("")
+	}else if configs_file.ShardingColumn != ""{
+		if p.Parsed_Document[configs_file.ShardingColumn] != nil{
+			replicationPoints = GetShardingStrategy(p.Parsed_Document[configs_file.ShardingColumn].(string))
+		}else{
+			panic("Sharding column does not exist in register.")
+		}
+
+	}else{
+		replicationPoints = GetReplicationNodesIncludingMyself()
+	}
+
+	if (replicationPoints == nil || len(replicationPoints) < 1){ 
+		replicationPoints = GetReplicationNodesIncludingMyself()// returns list of nodes where data should be shared if there is no sharding strategy, returns nil. IF nil, just replicate data to all nodes. 
+	}
+
+	//Level of Consistency choice : Eventual or full (WHEN SHARDING) If a node is down, it will demand recovery, using the accumulated write ahead log
+	// var wg sync.WaitGroup
+	var jsonStr = `
+	{
+	"body":%s,
+	"instance_list":%s
+	}
+	`
+	jsonList, _ := json.Marshal(replicationPoints) 
+	jsonStr = fmt.Sprintf(jsonStr,intermediate_inteface,string(jsonList))
+
+	// jsonParam, _ := json.Marshal(param)
+
+	var hadError bool = false
+	var successfulRow int
+	var successfulRows []peers
+
+	for indexCount, index_row := range replicationPoints{	
+		// wg.Add(1)		
+		_port, _ := strconv.Atoi(index_row.Port)
+		rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
+		response, err := rsocket_json_requests.RequestJSON("/" + index_row.Name +  "/update_wal_new", jsonStr)
+
+		if err != nil {
+			fmt.Println("err::::::")
+			fmt.Println(err)
+			hadError = true
+			
+		}else{
+			successfulRow = indexCount
+			successfulRows = append(successfulRows, index_row)
+		}
+		fmt.Println(response)
+
+	}
+
+	jsonSuccesfulRows, _ := json.Marshal(successfulRows)
+	for _, row := range successfulRows{
+		_port, _ := strconv.Atoi(row.Port)
+		rsocket_json_requests.RequestConfigs(row.Ip, _port)
+		_, err := rsocket_json_requests.RequestJSON("/" + row.Name +  "/update_successful_nodes_wal", string(jsonSuccesfulRows))
+		if err != nil {
+			fmt.Println("err::::::")
+			fmt.Println(err)
+		}
+	}
+
+	// wg.Wait()
+	if (hadError){
+		_port, _ := strconv.Atoi(replicationPoints[successfulRow].Port)
+		rsocket_json_requests.RequestConfigs(replicationPoints[successfulRow].Ip, _port)
+		_, err := rsocket_json_requests.RequestJSON("/" + replicationPoints[successfulRow].Name +  "/trigger_recover_data_nodes", "")
+		if err != nil {
+			fmt.Println("err::::::")
+			fmt.Println(err)
+		}
+	}
+
+	return "Ok"
+}
+
+func GetShardingStrategy(columnValue string) []peers{
+
+	var shards []peers
+	fmt.Println(shards)
+
+	// if (configs_file.ShardingType != ""){
+	// 	for replica, iReplica := range configs_file.Sharding.Replicas{
+	// 		shards = append(shards, iReplica)
+	// 	}
+	// 	return shards 
+	// }
+	return nil
+}
+func GetReplicationNodesIncludingMyself()[]peers{
+	return configs_file.Peers
+}
+
+func UpdateWal(payload interface{}) interface{}{
+
+	row, _ := GetParsedDocumentToMemRow(payload)
+	listInstances := GetInstanceList(payload)
+	it.Key_id = row.Key_id
+
+	var param interface{}
+	param = map[string]interface{}{
+		"key_id": strconv.Itoa(row.Key_id),
+		"table":  row.Table_name,
+		"body": row,
+	}
+	var wo wal_operation
+	wo.Rows = append(wo.Rows, row)
+	
+	for _, instance := range listInstances{
+		instanceToUpdate := ActiveInstances{InstanceName: instance.Name}
+		wo.InstancesToUpdate = append(wo.InstancesToUpdate, instanceToUpdate)
+	}
+
+	wal = append(wal, wo)
+
+	fmt.Println("-------------------------------------------------------------------")
+	fmt.Println("UpdateWal - WAL")
+	fmt.Println("-------------------------------------------------------------------")
+	fmt.Println(wal)
+
+	fmt.Println("-------------------------------------------------------------------")
+	fmt.Println("Memory Table")
+	fmt.Println("-------------------------------------------------------------------")
+	fmt.Println(mt)
+
+
+
+
+	jsonParam, _ := json.Marshal(param)
+	// _port, _ := strconv.Atoi(configs_file.Instance_Port)
+	// rsocket_json_requests.RequestConfigs(configs_file.Instance_ip, _port)
+	// rsocket_json_requests.RequestJSON("/" + configs_file.Instance_name +  "/insert_worker", string(jsonParam))
+	insertWorker(string(jsonParam))
+
+	return "Ok"
+}
+
+
+func CommitNodes(payload interface{}) interface{}{
+	return "Ok"
+}
+
+var _dataInRecovery bool = false
+func TriggerRecoverDataInNodes(payload interface{}) interface{}{
+	if _dataInRecovery == false{
+		_dataInRecovery = true
+		go ScheduleRecoverData(&_dataInRecovery)
+	}
+	
+	return "Ok"
+}
+
+func TryRecoverData() (bool, []error){
+
+	//try only once per recovery attempt
+	var errList []error 
+	previousNode := make(map[string]bool)
+	// var result bool = false
+	var successes int = 0
+	var cases int = 0
+
+	fmt.Println("-------------------------------------------------------------------")
+	fmt.Println("TryRecoverData - WAL")
+	fmt.Println("-------------------------------------------------------------------")
+	fmt.Println(wal)
+
+
+	for _, wo := range wal{
+		if wo.Status != true{
+			row := wo.Rows[0]
+			for _, node := range wo.InstancesToUpdate{
+				if node.Status != true{
+					val, found := previousNode[node.InstanceName]
+
+					cases ++
+					if (!found || (found && val)){
+						previousNode[node.InstanceName] = true
+						
+						index_row := GetPeerByInstanceName(node.InstanceName)
+						_port, _ := strconv.Atoi(index_row.Port)
+						rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
+						var param interface{}
+						param = map[string]interface{}{
+							"key_id": strconv.Itoa(row.Key_id),
+							"table":  row.Table_name,
+							"body": row,
+						}
+						_, err := rsocket_json_requests.RequestJSON("/" + index_row.Name +  "/update_wal_new", param)
+						if err != nil {
+							fmt.Println("err::::::")
+							fmt.Println(err)
+							errList = append(errList, err)
+							// result = false
+						}else{
+							successes ++
+						}
+					}
+				}
+			}
+		}
+	} 
+	return (successes == cases), errList
+}
+
+func ScheduleRecoverData(dataInRecovery * bool){
+	for (true){
+		time.Sleep(data_interval * time.Millisecond)
+		fmt.Println("-------------------------------------------------------------------")
+		fmt.Println("enter")
+		fmt.Println("-------------------------------------------------------------------")
+		success, _ := TryRecoverData()
+		if (success){
+			*dataInRecovery = false
+			fmt.Println("-------------------------------------------------------------------")
+			fmt.Println("EXIT")
+			fmt.Println("-------------------------------------------------------------------")
+			break
+		}
+	}
+}
+
+func UpdateSuccessfulNodesWal(payload interface{}) interface{}{
+	nodesSuccessfulString := payload.(string)
+	var nodesSuccessful []peers
+	json.Unmarshal([]byte(nodesSuccessfulString), &nodesSuccessful)
+
+	fmt.Println("-------------------------------------------------------------------")
+	fmt.Println("NODES")
+
+	fmt.Println("-------------------------------------------------------------------")
+	fmt.Println(nodesSuccessful)
+
+	count := 0
+	for countNode, node := range wal[len(wal) -1].InstancesToUpdate {
+		
+		for _, nodeSuccess := range nodesSuccessful{
+			if node.InstanceName == nodeSuccess.Name{
+				wal[len(wal) -1].InstancesToUpdate[countNode].Status = true
+			}
+		}
+		if node.Status == true {
+			count ++
+		}
+	}
+	if len(wal[len(wal) -1].InstancesToUpdate) == count{
+		wal[len(wal) -1].Status = true
+	}
+	return "Ok"
 }
