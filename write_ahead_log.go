@@ -488,8 +488,6 @@ func read_wal_strategy_rsocket(payload interface{})  interface{} {
 	jsonList, _ := json.Marshal(replicationPoints) 
 	jsonStr = fmt.Sprintf(jsonStr,intermediate_inteface,string(jsonList))
 
-	// jsonParam, _ := json.Marshal(param)
-
 	var hadError bool = false
 	var successfulRow int
 	var successfulRows []peers
@@ -498,19 +496,16 @@ func read_wal_strategy_rsocket(payload interface{})  interface{} {
 		// wg.Add(1)		
 		_port, _ := strconv.Atoi(index_row.Port)
 		rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
-		response, err := rsocket_json_requests.RequestJSON("/" + index_row.Name +  "/update_wal_new", jsonStr)
+		_, err := rsocket_json_requests.RequestJSON("/" + index_row.Name +  "/update_wal_new", jsonStr)
 
 		if err != nil {
 			fmt.Println("err::::::")
 			fmt.Println(err)
 			hadError = true
-			
 		}else{
 			successfulRow = indexCount
 			successfulRows = append(successfulRows, index_row)
 		}
-		fmt.Println(response)
-
 	}
 
 	jsonSuccesfulRows, _ := json.Marshal(successfulRows)
@@ -577,23 +572,7 @@ func UpdateWal(payload interface{}) interface{}{
 
 	wal = append(wal, wo)
 
-	fmt.Println("-------------------------------------------------------------------")
-	fmt.Println("UpdateWal - WAL")
-	fmt.Println("-------------------------------------------------------------------")
-	fmt.Println(wal)
-
-	fmt.Println("-------------------------------------------------------------------")
-	fmt.Println("Memory Table")
-	fmt.Println("-------------------------------------------------------------------")
-	fmt.Println(mt)
-
-
-
-
 	jsonParam, _ := json.Marshal(param)
-	// _port, _ := strconv.Atoi(configs_file.Instance_Port)
-	// rsocket_json_requests.RequestConfigs(configs_file.Instance_ip, _port)
-	// rsocket_json_requests.RequestJSON("/" + configs_file.Instance_name +  "/insert_worker", string(jsonParam))
 	insertWorker(string(jsonParam))
 
 	return "Ok"
@@ -622,12 +601,6 @@ func TryRecoverData() (bool, []error){
 	// var result bool = false
 	var successes int = 0
 	var cases int = 0
-
-	fmt.Println("-------------------------------------------------------------------")
-	fmt.Println("TryRecoverData - WAL")
-	fmt.Println("-------------------------------------------------------------------")
-	fmt.Println(wal)
-
 
 	for _, wo := range wal{
 		if wo.Status != true{
@@ -669,15 +642,9 @@ func TryRecoverData() (bool, []error){
 func ScheduleRecoverData(dataInRecovery * bool){
 	for (true){
 		time.Sleep(data_interval * time.Millisecond)
-		fmt.Println("-------------------------------------------------------------------")
-		fmt.Println("enter")
-		fmt.Println("-------------------------------------------------------------------")
 		success, _ := TryRecoverData()
 		if (success){
 			*dataInRecovery = false
-			fmt.Println("-------------------------------------------------------------------")
-			fmt.Println("EXIT")
-			fmt.Println("-------------------------------------------------------------------")
 			break
 		}
 	}
@@ -687,13 +654,6 @@ func UpdateSuccessfulNodesWal(payload interface{}) interface{}{
 	nodesSuccessfulString := payload.(string)
 	var nodesSuccessful []peers
 	json.Unmarshal([]byte(nodesSuccessfulString), &nodesSuccessful)
-
-	fmt.Println("-------------------------------------------------------------------")
-	fmt.Println("NODES")
-
-	fmt.Println("-------------------------------------------------------------------")
-	fmt.Println(nodesSuccessful)
-
 	count := 0
 	for countNode, node := range wal[len(wal) -1].InstancesToUpdate {
 		

@@ -221,7 +221,7 @@ func main() {
 	get_wal_disk()
 	get_mem_table()
 	// go dump_wal("------------------------------WAL---------------------------------")
-	// go dump_data("------------------------------Data---------------------------------")
+	go dump_data("------------------------------Data---------------------------------")
 	configfile, err := os.Open("configfile.json")
     if err != nil {
 		log.Fatal(err)
@@ -232,9 +232,6 @@ func main() {
 	json.Unmarshal(root, &configs_file)
 	handleRequests_rsocket(&configs_file)
 }
-
-
-
 
 func get_index_table() index_table{
 	configfile, err := os.Open("index_table.json")
@@ -311,78 +308,39 @@ func GetParsedDocumentToMemRow(payload interface{}) (mem_row, interface{}){
 	if (intermediate_inteface == nil){
 		intermediate_inteface = payload
 	}
-	fmt.Println("+++++++++++++++++++++++++++++")
-	fmt.Println(intermediate_inteface)
 
 	if reflect.TypeOf(myString) == reflect.TypeOf(intermediate_inteface){
 		
 		ii = []byte(intermediate_inteface.(string))
-		fmt.Println("000000000000000000000000000")
 		err := json.Unmarshal(ii, &p)
 		if err != nil {
 			fmt.Println(err)
-			fmt.Println("YES, THIS ONE")
 		}
-		
-		fmt.Println("-----------Output-----------")
-		fmt.Println(p)
 	
 	}else if (reflect.TypeOf(payload_content) == reflect.TypeOf(intermediate_inteface)){
-		fmt.Println("2222222222222222222222222")
 		var p_result mem_row
 		json_rows_bytes, err1 := json.Marshal(intermediate_inteface.(map[string]interface{}))
 		if err1 != nil {
 			fmt.Println(err1)
-			fmt.Println("YES, THIS first ONE")
 		}
 
 		err := json.Unmarshal(json_rows_bytes, &p_result)
 		if err != nil {
 			fmt.Println(err)
-			fmt.Println("YES, THIS ONE")
 		}
 		
-		fmt.Println("-----------Output-----------")
-		fmt.Println(p_result)
-
 		return p_result, intermediate_inteface
 	}else{	
-		fmt.Println("11111111111111111")
-
 		json_rows_bytes, err1 := json.Marshal(intermediate_inteface.([]interface{}))
 		if err1 != nil {
 			fmt.Println(err1)
-			fmt.Println("YES, THIS first ONE")
 		}
 
 		err := json.Unmarshal(json_rows_bytes, &p)
 		if err != nil {
 			fmt.Println(err)
-			fmt.Println("YES, THIS ONE")
 		}
-		
-		fmt.Println("-----------Output-----------")
-		fmt.Println(p)
 	}
-
-
-	
-
-	fmt.Println("+++++++++++++++++++++++++++++")
-	fmt.Println(intermediate_inteface)
-	// reader := bytes.NewReader(json_rows_bytes)
-
-	// dec := json.NewDecoder(reader)
-	// dec.DisallowUnknownFields()
-	
-	
-
-
-	// err := dec.Decode(&p)
-
-
-
-	//result.Document = p[0].Document
 	
 	return p[0], intermediate_inteface
 }
