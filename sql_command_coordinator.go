@@ -19,6 +19,12 @@ type Filter struct {
 	AlreadyConsumed bool //This flag is meant for joins, so they can me executed only once
 }
 
+type Condition struct{
+	ConditionIf Filter
+	ConditionThen interface{}
+	ConditionElse interface{}
+}
+
 
 type SqlClause struct{
 	Alias string
@@ -117,12 +123,58 @@ func parseCommandType (clause sqlparserproject.CommandTree) interface{} {
 	case "float64":
 		ret, _ := strconv.ParseFloat(clause.Clause, 64)
 		return ret
+
 	default:
 		break
 	}
 	
 	
 	return ""
+}
+
+
+func parseCondition(tree sqlparserproject.CommandTree, expected_context string, indexCommand * int) SqlClause {
+	var condition Condition
+	var clause SqlClause
+	fmt.Println(tree)
+	for *indexCommand < len(tree.CommandParts){
+		typeToken := strings.ToLower(tree.CommandParts[*indexCommand].TypeToken)
+		(*indexCommand) ++
+		// fmt.Println("parseCondition")
+		switch typeToken{
+		
+			case "condition_when":
+				var conditionIf Filter
+				read_through(tree.CommandParts[(*indexCommand) -1 ], "where", &conditionIf)
+				condition.ConditionIf = conditionIf
+				break
+			case "condition_then":
+				var conditionThen Filter
+				read_through(tree.CommandParts[(*indexCommand) -1 ], "where", &conditionThen)
+				if conditionThen.CommandLeft == nil && len(conditionThen.SelectClause)  > 0{
+					condition.ConditionThen = conditionThen.SelectClause[0]
+				}
+				condition.ConditionElse = parseCondition(tree, expected_context, indexCommand)
+				break
+			case "condition_else":
+				var conditionElse Filter
+				read_through(tree.CommandParts[(*indexCommand) -1 ], "where", &conditionElse)
+				if conditionElse.CommandLeft == nil && len(conditionElse.SelectClause)  > 0{
+					condition.ConditionElse = conditionElse.SelectClause[0]
+				}
+				break
+
+			default:
+				break
+		}
+		
+	}
+	
+	clause.SelectableObject = condition
+	fmt.Println("Clause")
+	fmt.Println(clause)
+
+	return clause
 }
 
 
@@ -138,7 +190,7 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 		typeToken := strings.ToLower(tree.CommandParts[indexCommand].TypeToken)
 		if 
 		// (typeToken == "field_select_to_show" ) ||
-		(tree.TypeToken == "where_fields") &&
+		(tree.TypeToken == "where_fields" || tree.TypeToken == "CONDITION_WHEN") &&
 		((typeToken == "field_filter" ) || 
 		(typeToken == "number" ) || 
 		(typeToken == "string" ) || 
@@ -215,12 +267,23 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 		(typeToken == "field_select_to_show") || 
 		(typeToken == "number") || 
 		(typeToken == "float64") ||
+		(typeToken == "field") ||
 		(typeToken == "int64"){
 			var objSelect SqlClause
 			objSelect.SelectableObject = parseCommandType(tree.CommandParts[indexCommand])
-			currentFilter.SelectClause = append(currentFilter.SelectClause, objSelect)
+			if (tree.CommandParts[indexCommand].Alias != "") { objSelect.Alias = tree.CommandParts[indexCommand].Alias }
+			(*currentFilter).SelectClause = append(currentFilter.SelectClause, objSelect)
 
-		}else if strings.Index(typeToken, "command") > -1 || (typeToken == "where_fields") || (typeToken == "tables_from") || (typeToken == "fields_select") || (typeToken == "fields"){
+		}else if (typeToken == "condition_case"){
+			var objSelect SqlClause
+			indexConditionValue := 0
+			indexCondition := &indexConditionValue
+
+			objSelect = parseCondition(tree.CommandParts[indexCommand], expected_context, indexCondition)
+			if (tree.Alias != "") { objSelect.Alias = tree.Alias }
+
+			currentFilter.SelectClause = append(currentFilter.SelectClause, objSelect)
+		}else if strings.Index(typeToken, "command") > -1 || (typeToken == "where_fields") || (typeToken == "tables_from") || (typeToken == "fields_select") || (typeToken == "fields") || (typeToken == "condition"){
 			filterNew := new(Filter)
 			switch strings.ToLower(command.ClauseName) {
 			case "select":
@@ -238,15 +301,6 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 				expected_context = "from"
 				//identify here if it has real table or subquery. If it does habe subquery, I also add this filter to TableObject with the alias
 				CheckNodeForTables(command, currentFilter, filterNew)
-
-				// read_through(command, expected_context, filterNew)
-				// if !IsNotSubquery {
-				// 	newTableObject := SqlClause{Alias:alias, IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
-				// 	currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
-				// }else{
-				// 	newTableObject := SqlClause{Name:alias,IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
-				// 	currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
-				// }
 				break
 			case "where":
 				expected_context = "where"
@@ -256,10 +310,13 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 				expected_context = "where"
 				read_through(command, expected_context, filterNew)
 				break
+			case "condition":
+				expected_context = "where"
+				read_through(command, expected_context, currentFilter)
+				break
 			default:
 				if strings.ToLower(command.ClauseName) == "select"{
 					expected_context_next = "select"
-
 				}
 				break
 			}
@@ -267,9 +324,7 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 
 		}else{
 			if len(tree.CommandParts[indexCommand].CommandParts) > 0{
-				// filterNewChild := new(Filter)
 				read_through(tree.CommandParts[indexCommand], "", currentFilter)
-				// filterNew.CommandRight = filterNewChild
 			}
 		}
 		indexCommand ++
@@ -326,11 +381,41 @@ func CheckNodeForTables(tree sqlparserproject.CommandTree, currentFilter * Filte
 			newTableObject := SqlClause{Name: branch.Clause, Alias:alias, IsSubquery:!IsNotSubquery, SelectableObject: filterNew}
 			currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)
 		}
-		// if result != true{
-		// 	if branch.Alias != ""{alias = branch.Alias} else { alias = branch.Clause }
-		// 	fmt.Println(alias)
-		// }
 	}
-	// return result, alias
+}
+
+func GetConditionFlow(row mem_table_queries, column SqlClause, ctx * map[string] interface {} ) (SqlClause){
+	condition := column.SelectableObject.(Condition)
+	filterIf := condition.ConditionIf
+
+	if applyLogic2(row, &filterIf, ctx){
+		clauseThen := condition.ConditionThen.(SqlClause)
+		column = GetFlowAfterLogic(row, clauseThen, ctx)
+	}else{
+		clauseElse := condition.ConditionElse.(SqlClause)
+		column = GetFlowAfterLogic(row, clauseElse, ctx)	
+	}
+
+
+	return column 
+}
+
+func GetFlowAfterLogic( row mem_table_queries, column SqlClause, ctx * map[string] interface {} ) SqlClause{
+	var condition Condition
+	var clauseValidation sqlparserproject.CommandTree
+	if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(column){
+		column = ProjectColumns(row, column, ctx)
+	}else if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(condition){
+		column = GetConditionFlow(row, column, ctx)
+	}else if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation){
+		column = ProjectColumns(row, column, ctx)
+	}else{
+		column = ProjectColumns(row, column, ctx)
+		// filterThen := column.SelectableObject.(Filter)
+		// selectFieldsDecoupled2(filterThen, filterThen, 0, column.Alias, ctx)
+		// selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, indexFilter int, aliasSubquery string, ctx * map[string] interface{}) // var tableResult []mem_table_queries
+		//Need to check how I'm going to return a subquery from here
+	}
+	return column
 }
 

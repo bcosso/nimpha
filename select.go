@@ -405,6 +405,7 @@ func select_data_where_worker_contains_rsocket_sql(payload interface{}) interfac
 	// _query_temp_tables = nil
 
 	// _currentQueryId = 0
+	fmt.Println(filteredResult)
 
 	return filteredResult
 }
@@ -424,6 +425,8 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 	for _, filter := range  logic_filters.ChildFilters {
 		tableResult = selectFieldsDecoupled2(filter, fullLogicFilters, indexFilter, futureAliasSubquery, ctx).([]mem_table_queries)
 	}
+
+
 
 	//If is a select_to_show clause I need to Check the SelectClause and if there is no table, I create one in the in memory qyery
 	if len(logic_filters.ChildFilters) > 0{
@@ -484,7 +487,6 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 // var _query_table_id int = 0
 func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause, aliasSubquery string, indexFilter int, ctx * map[string] interface {} ) []mem_table_queries{
 	var tableResult []mem_table_queries
-	var clauseValidation sqlparserproject.CommandTree
 	_query := (*ctx)["_query"].(map[string] []mem_table_queries)
 	tableWrite := ""
 
@@ -499,38 +501,27 @@ func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause
 		for index < len(_query[table])  {
 			if applyLogic2(_query[table][index] , &filter, ctx){
 				columns := make(map[string]interface{})
-
 				for _, column := range selectObject{
-					if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation){
-						clause := column.SelectableObject.(sqlparserproject.CommandTree)
-						columns[clause.Clause] = make(map[string]interface{})
-						rowColumn, found := CheckColumnExistance(_query[table][index], clause)
-						if found == false{
-							//Change for proper error treatment here.
-							panic("Non existent column")
-						}
-						columns[clause.Clause] = rowColumn
+					columnResult := ProjectColumns(_query[table][index], column, ctx)
+					if (column.Alias != ""){
+						columnResult.Alias = column.Alias
+					}// columnResult.Name = column.Name
+
+					if columnResult.Alias != "" {
+						columns[columnResult.Alias] = make(map[string]interface{})
+						columns[columnResult.Alias] =  columnResult.SelectableObject
 					}else{
-						if column.Alias != "" {
-							columns[column.Alias] = make(map[string]interface{})
-							columns[column.Alias] =  column.SelectableObject
-						}else{
-							columns[column.Name] = make(map[string]interface{})
-							columns[column.Name] =  column.SelectableObject
-						}
+						columns[columnResult.Name] = make(map[string]interface{})
+						columns[columnResult.Name] =  columnResult.SelectableObject
 					}
 				}
-
 				newRow := mem_table_queries{TableName: tableWrite, Rows:columns}
 				tableResult = append(tableResult, newRow)
-
 			}
 			
 			index ++
 		}
-
 		_query[tableWrite] = append(_query[tableWrite], tableResult...)
-		
 	}
 
 	return  tableResult
@@ -551,6 +542,38 @@ func CheckColumnExistance(row mem_table_queries, clause sqlparserproject.Command
 	}
 	
 	return actualValue, found
+}
+
+func ProjectColumns(row mem_table_queries, column SqlClause,  ctx * map[string] interface {} ) SqlClause{
+	var clauseValidation sqlparserproject.CommandTree
+	// columns := make(map[string]interface{})
+	var conditionValidation Condition
+	var columnReturn SqlClause
+	if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation){
+		clause := column.SelectableObject.(sqlparserproject.CommandTree)
+		// columns[clause.Clause] = make(map[string]interface{})
+		rowColumn, found := CheckColumnExistance(row, clause)
+		if found == false{
+			//Change for proper error treatment here.
+			fmt.Println(column.SelectableObject)
+			panic("Non existent column:" + column.Name + " - " + column.Alias)
+			
+		}
+		columnReturn.Alias = clause.Clause
+		columnReturn.SelectableObject = rowColumn
+		
+	}else{
+		if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(conditionValidation){
+			columnReturn = GetConditionFlow(row, column, ctx)
+		} else if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(columnReturn){
+			columnReturn = column.SelectableObject.(SqlClause)
+		}else{
+			columnReturn = column
+		}
+	}
+	
+
+	return columnReturn
 }
 
 func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx * map[string] interface{}){
@@ -1069,3 +1092,4 @@ func GetClauseFromValue(interfaceValue interface{}) sqlparserproject.CommandTree
 	return clause
 
 }
+
