@@ -10,11 +10,25 @@ Pet In-Memory database. Ideally it will be:
 TODO:
  - Update
  - Error treatment
- - Node unavailability treatment
+ - Guarantee insert concurrency - Should be guaranteed by the elected WAL node as is
+ - WAL node election mechanism
+ - ~~Node unavailability treatment~~
  - Separate components in the code (refactor)
- - Replication of WAL
- - Replication of data
+ - ~~Replication of WAL~~- WAL is replicated and on error (node down) triggers a data recovery event in one of the nodes
+ - ~~Replication of data~~
+ - Indexing mechanism (BTREE partially implemented)
+ - Sharding - Sharding strategies : Alphabetic order, index range, ...? 
  - ~~Convert from HTTP to a protocol lower in the OSI model~~ Done with RSOCKET
  - Remove non rsocket communication
  - refactor code to Golang standard naming convention. Started with snake case but had to change due to Golang standards.
+ - Drivers for usage by client systems
+
+TODO Parser:
+ - INSERT
+ - ~~select with subqueries~~
+ - Select without where clause
+ - Mathematical operations
+ - ~~Case When~~
+ - Nested Case When
+ - ...
  
