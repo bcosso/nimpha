@@ -502,17 +502,20 @@ func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause
 			if applyLogic2(_query[table][index] , &filter, ctx){
 				columns := make(map[string]interface{})
 				for _, column := range selectObject{
-					columnResult := ProjectColumns(_query[table][index], column, ctx)
-					if (column.Alias != ""){
-						columnResult.Alias = column.Alias
-					}// columnResult.Name = column.Name
+					if !checkSelectStar(column, &columns, _query[table][index]){
+						columnResult := ProjectColumns(_query[table][index], column, ctx)
+					
+						if (column.Alias != ""){
+							columnResult.Alias = column.Alias
+						}// columnResult.Name = column.Name
 
-					if columnResult.Alias != "" {
-						columns[columnResult.Alias] = make(map[string]interface{})
-						columns[columnResult.Alias] =  columnResult.SelectableObject
-					}else{
-						columns[columnResult.Name] = make(map[string]interface{})
-						columns[columnResult.Name] =  columnResult.SelectableObject
+						if columnResult.Alias != "" {
+							columns[columnResult.Alias] = make(map[string]interface{})
+							columns[columnResult.Alias] =  columnResult.SelectableObject
+						}else{
+							columns[columnResult.Name] = make(map[string]interface{})
+							columns[columnResult.Name] =  columnResult.SelectableObject
+						}
 					}
 				}
 				newRow := mem_table_queries{TableName: tableWrite, Rows:columns}
@@ -574,6 +577,21 @@ func ProjectColumns(row mem_table_queries, column SqlClause,  ctx * map[string] 
 	
 
 	return columnReturn
+}
+
+func checkSelectStar(columnResult SqlClause, columns * map[string]interface{}, row mem_table_queries) bool{
+
+	found, value := CheckWhichSideContainsColumn(columnResult.SelectableObject, nil)
+	if found > -1 {
+		if value.Clause == "*"{
+			for k, v := range row.Rows.(map[string]interface{}) { 
+				(*columns)[k] = make(map[string]interface{})
+				(*columns)[k] =  v
+			}
+			return true
+		}
+	}
+	return false
 }
 
 func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx * map[string] interface{}){
@@ -938,7 +956,7 @@ func applyLogic2(current_row mem_table_queries, logicObject2 * Filter, ctx * map
 	return result
 }
 
-func CheckWhichSideContainsColumn(operator string, leftValue interface{}, rightValue interface{}, row mem_table_queries) (int, sqlparserproject.CommandTree){
+func CheckWhichSideContainsColumn(leftValue interface{}, rightValue interface{}) (int, sqlparserproject.CommandTree){
 	var clause sqlparserproject.CommandTree
 	var filterReference sqlparserproject.CommandTree
 	var filterReferencePointer * sqlparserproject.CommandTree
@@ -965,7 +983,7 @@ func GetFilterAndFilter2(operator string, leftValue interface{}, rightValue inte
 	resultComparison := false
 	mapRow := row.Rows.(map[string] interface{})
 
-	side, clause := CheckWhichSideContainsColumn(operator, leftValue, rightValue, row)
+	side, clause := CheckWhichSideContainsColumn(leftValue, rightValue)
 	//side = 0 - both, side = 1 - right, side = 2 - left, side = -1 - none 
 
 	if (side == 0){

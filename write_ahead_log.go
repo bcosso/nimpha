@@ -477,7 +477,7 @@ func read_wal_strategy_rsocket(payload interface{})  interface{} {
 		replicationPoints = GetReplicationNodesIncludingMyself()// returns list of nodes where data should be shared if there is no sharding strategy, returns nil. IF nil, just replicate data to all nodes. 
 	}
 
-	//Level of Consistency choice : Eventual or full (WHEN SHARDING) If a node is down, it will demand recovery, using the accumulated write ahead log
+	//Level of Consistency choice : Eventual or full (WHEN SHARDING and/or REPLICATING) If a node is down, it will demand recovery, using the accumulated write ahead log
 	// var wg sync.WaitGroup
 	var jsonStr = `
 	{
