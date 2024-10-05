@@ -443,7 +443,12 @@ func GetNextNodesToInsertAndWriteWal(data_post * []mem_row ) {
 
 
 	if err != nil {
-		log.Fatal(err)
+		// log.Fatal(err)
+		if (it.Index_WAL < len(it.Index_rows) -1){
+			it.Index_WAL ++
+		}else{
+			it.Index_WAL = 0
+		}
 		fmt.Println("err::::::") 
 	}
 }
@@ -460,11 +465,14 @@ func read_wal_strategy_rsocket(payload interface{})  interface{} {
 	var replicationPoints [] peers
 
 	
-	if strings.ToLower(configs_file.ShardingType) == "table"{
-		replicationPoints = GetShardingStrategy("")
-	}else if configs_file.ShardingColumn != ""{
-		if p.Parsed_Document[configs_file.ShardingColumn] != nil{
-			replicationPoints = GetShardingStrategy(p.Parsed_Document[configs_file.ShardingColumn].(string))
+	if strings.ToLower(configs_file.Sharding_type) == "table"{
+		//TODO: GetTableName
+		tableNames := []string { p.Table_name }
+
+		replicationPoints = GetShardingStrategy("", tableNames)
+	}else if configs_file.Sharding_column != ""{
+		if p.Parsed_Document[configs_file.Sharding_column] != nil{
+			replicationPoints = GetShardingStrategy(p.Parsed_Document[configs_file.Sharding_column].(string), nil)
 		}else{
 			panic("Sharding column does not exist in register.")
 		}
@@ -533,10 +541,21 @@ func read_wal_strategy_rsocket(payload interface{})  interface{} {
 	return "Ok"
 }
 
-func GetShardingStrategy(columnValue string) []peers{
+func GetShardingStrategy(columnValue string, tableNames [] string) []peers{
 
 	var shards []peers
 	fmt.Println(shards)
+	fmt.Println(tableNames)
+	if columnValue != ""{
+
+	}else{
+		//TODO:
+		//Sharded by table
+		//for each table in Tablenames, Read from a Hashtable in which node it can reside.Don't repeat nodes in the final result.
+		if (len(tableNames) > 0){
+			shards, _ = GetShardingForTables(tableNames)
+		}
+	}
 
 	// if (configs_file.ShardingType != ""){
 	// 	for replica, iReplica := range configs_file.Sharding.Replicas{
@@ -544,7 +563,7 @@ func GetShardingStrategy(columnValue string) []peers{
 	// 	}
 	// 	return shards 
 	// }
-	return nil
+	return shards
 }
 func GetReplicationNodesIncludingMyself()[]peers{
 	return configs_file.Peers
