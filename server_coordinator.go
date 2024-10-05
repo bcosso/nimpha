@@ -12,8 +12,10 @@ import (
 	"github.com/gorilla/mux"
 	"net/http"
 	"github.com/bcosso/rsocket_json_requests"
+	"github.com/bcosso/sqlparserproject"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 
@@ -26,10 +28,10 @@ type config struct {
 	Instance_name   string `json:"instance_name"`
 	Instance_Port string `json:"instance_port"`
 	//RANGE, ALPHABETICAL, TABLE
-	ShardingType string `json:sharding_type`
-	ShardingColumn string `json:sharding_column`
-	ShardingGroup []ShardGroup `json:sharding_group`
-	ShardingStrategy []ShardStrategy `json:sharding_strategy`
+	Sharding_type string `json:sharding_type`
+	Sharding_column string `json:sharding_column`
+	Sharding_groups []ShardGroup `json:sharding_groups`
+	Sharding_strategy map[string]ShardStrategy `json:sharding_strategy`
 }
 
 type peers struct {
@@ -43,12 +45,12 @@ type ShardStrategy struct {
 	//RANGE, ALPHABETICAL, TABLE
 	From string `json:"from"`
 	To string `json:"to"`
-	ShardingGroupId string `json:"sharding_group_id"`
+	Sharding_group_id int `json:"sharding_group_id"`
 }
 
 type ShardGroup struct{
-	ShardingGroupId string `json:"sharding_group_id"`
-	Replicas   []peers `json:"replicas"`
+	Sharding_group_id int `json:"sharding_group_id"`
+	Replicas   []int `json:"replicas"`
 }
 
 type index_table struct {
@@ -198,6 +200,7 @@ func handleRequests_rsocket(configs *config ) {
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_wal_new", UpdateWal) 
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_successful_nodes_wal", UpdateSuccessfulNodesWal) 
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/trigger_recover_data_nodes", TriggerRecoverDataInNodes)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/query_data_sharding_rsocket", query_data_sharding_rsocket)
 	// 
 	// TriggerRecoverDataInNodes
 
@@ -380,4 +383,217 @@ func GetPeerByInstanceName(instanceName string) peers{
 		}
 	}
 	return emptyPeer
+}
+type TypeContract struct{
+	NameType string `json:"nametype"`
+	ChildrenType [] TypeContract `json:"childtype"`
+}
+func ParseObjectTypeToContract(object interface{}, objectType * TypeContract) interface {} {
+	// , objectType * TypeContract
+	
+	// var contract TypeContract
+
+	// objectMap := object.(map[string] interface{})
+	// for k, v := range m { 
+	// 	fmt.Printf("key[%s] value[%s]\n", k, v)
+	// }
+	v := reflect.ValueOf(object)
+
+	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("Debug ParseObjectTypeToContract")
+	fmt.Println(v)
+	fmt.Println(v.Interface())
+	fmt.Println(reflect.TypeOf(v.Interface()).Name())
+	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	(*objectType).NameType = reflect.TypeOf(v.Interface()).String()
+
+	if (v.Kind() == reflect.Slice){
+		fmt.Println("Size of slice:")
+		fmt.Println(v.Len())
+		for i := 0; i < v.Len(); i++ {
+			var innerObjectType TypeContract
+			object = ParseObjectTypeToContract(v.Index(i).Interface(), &innerObjectType)
+			(*objectType).ChildrenType = append((*objectType).ChildrenType, innerObjectType)
+
+		}
+	}else if v.Kind() == reflect.Struct{
+		values := make([]interface{}, v.NumField())
+
+		for i := 0; i < v.NumField(); i++ {
+			values[i] = v.Field(i).Interface()
+			vValue := reflect.ValueOf(values[i])
+			fmt.Println("KindOf- TYpeOf")
+			fmt.Println(vValue.Kind())
+			fmt.Println(reflect.TypeOf(values[i]))
+			fmt.Println(vValue.Kind().String())
+			fmt.Println(values[i] == nil)
+
+			if (values[i] != nil && reflect.TypeOf(values[i]).Name() == "ptr"){
+				v.Field(i).Set(vValue)
+				values[i] = v.Field(i).Interface()
+				vValue = reflect.ValueOf(values[i])
+			}
+			if (vValue.Kind() == reflect.Struct || vValue.Kind() == reflect.Slice || vValue.Kind() == reflect.Map){
+				var innerObjectType TypeContract
+				ParseObjectTypeToContract(values[i], &innerObjectType)
+				(*objectType).ChildrenType = append((*objectType).ChildrenType, innerObjectType)
+			}else{
+				var innerObjectType TypeContract
+				innerObjectType.NameType = vValue.Kind().String()
+				(*objectType).ChildrenType = append((*objectType).ChildrenType, innerObjectType)
+			}
+		}
+		fmt.Println(values)
+	}else{
+		
+	}
+
+	return object
+}
+
+
+func ParseContractToObjectType(object interface{}, contract TypeContract, objectResult interface{}) interface{} {
+	
+	v := reflect.ValueOf(object)
+	
+	ps := reflect.ValueOf(&object)
+    // struct
+    s := ps.Elem().Elem()
+	// for _, v := range contract.ChildrenType {
+	// 	fmt.Println(v.NameType)
+	// }
+	fmt.Println("-----------------------------------------------------")
+	fmt.Println("Entered ParseContractToObjectType")
+	fmt.Println(s.String())
+
+
+
+	if (v.Kind() == reflect.Slice){
+		// fmt.Println("Size of slice:")
+		// fmt.Println(v.Len())
+		fmt.Println("-----------------------------------------------------")
+		fmt.Println("Has a slice")
+		// values := make([]interface{}, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			currentInterface := v.Index(i).Interface()
+			if (reflect.ValueOf(currentInterface).Kind() == reflect.Struct || reflect.ValueOf(currentInterface).Kind() == reflect.Slice){
+				result := ParseContractToObjectType(currentInterface, contract.ChildrenType[i], objectResult)
+				v.Index(i).Set(reflect.ValueOf(result))
+			}
+		}
+	}else if v.Kind() == reflect.Struct{
+		values := make([]interface{}, v.NumField())
+		// fmt.Println("------------------------------------")
+		// fmt.Println(v.NumField())
+		// fmt.Println(len(contract.ChildrenType))
+		// fmt.Println(len(contract.ChildrenType[1].ChildrenType))
+		// fmt.Println("------------------------------------")
+		// fmt.Println(contract.ChildrenType[1].ChildrenType)
+
+
+	
+		
+		for i := 0; i < v.NumField(); i++ {
+			values[i] = v.Field(i).Interface()
+			fieldName := v.Type().Field(i).Name
+			vValue := reflect.ValueOf(values[i])
+			// fmt.Println("=============================================================")
+			// fmt.Println(reflect.TypeOf(values[i]))
+			// fmt.Println(reflect.TypeOf(vValue))
+			// fmt.Println(vValue.Kind())
+			// fmt.Println(contract.ChildrenType[i].NameType)
+			// // fmt.Println(reflect.TypeOf(values[i]).String() == contract.ChildrenType[i].NameType)
+			// // fmt.Println(contract.ChildrenType)
+			// // fmt.Println(v)
+			// fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+			if (reflect.TypeOf(values[i]) != nil){
+				
+			
+				
+					
+					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
+					// fmt.Println("CONVERSAO POLEMICA")
+					// fmt.Println(typeRegistry)
+					// fmt.Println("/" + contract.ChildrenType[i].NameType + "/")
+					// fmt.Println(typeRegistry[contract.ChildrenType[i].NameType])
+					// fmt.Println(typeRegistry[contract.ChildrenType[i].NameType] == nil)
+					// fmt.Println(contract.ChildrenType[i].NameType == "")
+				// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
+				if contract.ChildrenType[i].NameType!= "" && contract.ChildrenType[i].NameType!= "ptr"{
+					fmt.Println("--------------------------------")
+					fmt.Println(contract.ChildrenType[i].NameType)
+					fmt.Println(reflect.TypeOf(values[i]).Name)
+					fmt.Println(fieldName)
+
+
+					fmt.Println("--------------------------------")
+					// fmt.Println(typeRegistry)
+					// fmt.Println(typeRegistry[contract.ChildrenType[i].NameType])
+					// newValue := vValue.Convert(typeRegistry[contract.ChildrenType[i].NameType])
+					newValue := reflect.ValueOf(ConvertTypes(vValue , contract.ChildrenType[i].NameType))
+					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
+					// fmt.Println(newValue)
+					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
+					// fmt.Println(vValue)
+					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
+					if (vValue.Kind() == reflect.Struct || vValue.Kind() == reflect.Slice || vValue.Kind() == reflect.Map){
+						intValue := ParseContractToObjectType(values[i],contract.ChildrenType[i], newValue)
+						newValue = reflect.ValueOf(ConvertTypes(intValue, contract.ChildrenType[i].NameType))
+						if (reflect.TypeOf(values[i]).String() != contract.ChildrenType[i].NameType ){
+							fmt.Println("00000000000000000000000000000000000000000000000000000")
+							fmt.Println("SHOULD GO IN")
+							fmt.Println("-----------------------------------------------------")
+							f := s.FieldByName(fieldName)
+							if f.IsValid() {
+								fmt.Println("-----------------------------------------------------")
+								fmt.Println("WAS VALID")
+								fmt.Println("-----------------------------------------------------")
+								if f.CanSet() {
+									fmt.Println("-----------------------------------------------------")
+									fmt.Println("Set a new value to Variable")
+									f.Set(newValue)
+									fmt.Println(newValue)
+								}
+							}
+						}
+					}
+					
+				}
+			}
+		}
+	}else{
+
+	}
+	return object
+}
+
+func validateTypeName(name string) string{
+	return strings.Replace(name, "main.", "", -1)
+}
+
+var typeRegistry = make(map[string]reflect.Type)
+func makeInstance(name string) interface{} {
+    v := reflect.New(typeRegistry[name]).Elem()
+    // Maybe fill in fields here if necessary
+    return v.Interface()
+}
+
+
+
+func InitTypes() {
+    myTypes := []interface{}{Filter{}, SqlClause {}, Condition {}, sqlparserproject.CommandTree {}, "string", 0, 0.0, false, []Filter{}, []SqlClause {}, []Condition {}, []sqlparserproject.CommandTree {} }
+    for _, v := range myTypes {
+        // typeRegistry["MyString"] = reflect.TypeOf(MyString{})
+        typeRegistry[fmt.Sprintf("%T", v)] = reflect.TypeOf(v)
+    }
+}
+
+func ConvertTypes(object interface {}, name string) interface {}{
+	newValue := makeInstance(name)
+	jsonFilter, _ := json.Marshal(&object) 
+	err1 := json.Unmarshal([]byte(string(jsonFilter)), &newValue)
+	if (err1 != nil){
+		panic(err1)
+	}
+	return newValue
 }

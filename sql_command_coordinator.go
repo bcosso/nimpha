@@ -62,7 +62,7 @@ func execute_query(payload interface{}) interface{}{
 	fmt.Println("-----------------------------------------------------------")
 	fmt.Println(filterNew)
 
-	result := select_data_where_worker_contains_rsocket_sql(*filterNew)
+	result := select_data_where_worker_contains_rsocket_sql(*filterNew, query)
 
 	return result
 }
