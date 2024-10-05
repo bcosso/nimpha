@@ -392,8 +392,82 @@ func select_data_rsocket(payload interface{}) interface{}{
 	return result
 }
 
-func select_data_where_worker_contains_rsocket_sql(payload interface{}) interface{}{
-	logic_filters := payload.(Filter)
+
+func query_data_sharding_rsocket(payload interface{}) interface{}{
+	var logic_filters Filter
+	var tables []SqlClause
+	var contract TypeContract
+	var filter Filter
+	fmt.Println("----------------------CHEGOU-----------------------------------------------------")
+	fmt.Println(payload)
+	
+	payload_content, ok :=  payload.(map[string] interface{})
+	if !ok{
+		fmt.Println("ERROR!")	
+	}
+	fmt.Println(payload_content)
+	fmt.Println("----------------------CHEGOU-----------------------------------------------------")
+	logic_filters_intermediate := payload_content["filter"]
+	jsonbody_filters, errFilters := json.Marshal(logic_filters_intermediate)
+    if errFilters != nil {
+        // do error check
+        fmt.Println(errFilters)
+    }
+
+    if err := json.Unmarshal(jsonbody_filters, &logic_filters); err != nil {
+        // do error check
+        fmt.Println(err)
+    }
+
+
+	fmt.Println("----------------------CHEGOU2-----------------------------------------------------")
+	tables_intermediate := payload_content["tables"]
+	jsonbody_tables, errTables := json.Marshal(tables_intermediate)
+    if errFilters != nil {
+        // do error check
+        fmt.Println(errTables)
+    }
+
+    if err := json.Unmarshal(jsonbody_tables, &tables); err != nil {
+        // do error check
+        fmt.Println(err)
+    }
+
+	fmt.Println("----------------------CHEGOU3-----------------------------------------------------")
+	contract_intermediate := payload_content["contract"]
+	jsonbody_contract, errContract := json.Marshal(contract_intermediate)
+    if errContract != nil {
+        // do error check
+        fmt.Println(errContract)
+    }
+
+    if err := json.Unmarshal(jsonbody_contract, &contract); err != nil {
+        // do error check
+        fmt.Println(err)
+    }
+
+	fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
+	fmt.Println("Contract")
+	fmt.Println(contract)
+	fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
+
+
+	InitTypes()
+	filter = ParseContractToObjectType(logic_filters, contract, filter).(Filter)
+
+	fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
+	fmt.Println("FILTERS")
+	fmt.Println(filter)
+	fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
+
+
+
+
+	fmt.Println("-----------------------------------------------------")
+	fmt.Println("Tables:")
+	fmt.Println(tables)
+	fmt.Println(logic_filters)
+	fmt.Println("-----------------------------------------------------")
 	ctx :=  make(map[string] interface{})
 	_query := make(map[string] []mem_table_queries)
 	ctx["_query"] = _query
@@ -401,7 +475,224 @@ func select_data_where_worker_contains_rsocket_sql(payload interface{}) interfac
 	ctx["_analyzedFilterList"] = _analyzedFilterList
 
 	//Distribute here the call to other instances.
-	filteredResult := selectFieldsDecoupled2(logic_filters, logic_filters, 0, "", &ctx)
+	filteredResult := selectFieldsDecoupled2(filter, filter, 0, tables, "", &ctx)
+
+	fmt.Println("----------------------------------------------------")
+	
+	fmt.Println("filteredResult")
+	fmt.Println(filteredResult)
+	fmt.Println("----------------------------------------------------")
+
+	return filteredResult
+}
+
+// var hashOfTablesToPeers map[string] []Peer
+func GetShardingForTables(tables [] SqlClause) ( []peers, []string){
+	var peersResult []peers
+	var tablesOutOfHash [] string
+	fmt.Println("-----------------------------------------------------")
+	fmt.Println("Tables:")
+	fmt.Println(tables)
+	fmt.Println("-----------------------------------------------------")
+	for _, tb := range tables {
+		//create new table with hash (map) for table name containing a peer or a peer name,
+		// check if exists in peerResult, if yes, add to tablesOutOfHash  
+		fmt.Println("-----------------------------------------------------")
+		fmt.Println("ShardingStrategies:")
+		fmt.Println(configs_file.Sharding_strategy)
+		fmt.Println(tb.Name)
+		fmt.Println("-----------------------------------------------------")
+		val, ok := configs_file.Sharding_strategy[tb.Name]
+		// valAlias, okAlias := configs_file.ShardingGroup[tb.Alias] // That's actually not needed, check again and remove it
+		if !ok {
+			// panic("Table not found in shards")
+			tablesOutOfHash =  append(tablesOutOfHash, tb.Name)
+			break
+		}
+		
+		fmt.Println("-----------------------------------------------------")
+		fmt.Println(val)
+		fmt.Println("-----------------------------------------------------")
+
+		// if len(val) == 0 { val = valAlias }
+		if len(peersResult) == 0{
+
+			peersResult = append(peersResult, getReplicasFromShardGroup(configs_file.Sharding_groups[val.Sharding_group_id - 1].Replicas)...)
+			fmt.Println("-----------------------------------------------------")
+			fmt.Println("Got the PEERs")
+			fmt.Println(peersResult)
+			fmt.Println("-----------------------------------------------------")
+		}else{
+			for _, v := range getReplicasFromShardGroup(configs_file.Sharding_groups[val.Sharding_group_id - 1].Replicas){
+				containsPeer := false
+				for _, p := range peersResult{
+					if (v.Name == p.Name){
+						containsPeer = true
+					}
+				}
+				if containsPeer == false{
+					// peerResult = nil
+					tablesOutOfHash = append(tablesOutOfHash, v.Name)
+					// break;
+				}
+			}
+		}
+		// otherwise add to peerResult 
+		fmt.Println(val)
+
+	}
+	return peersResult, tablesOutOfHash
+}
+
+func getReplicasFromShardGroup (groupSharding [] int) []peers{
+	var resultPeers [] peers
+	for _, iShard := range groupSharding{
+		resultPeers = append(resultPeers, configs_file.Peers[iShard])
+	}
+	return resultPeers
+}
+
+func GetQueryDataFromShardQuery(peer [] peers, query string) []mem_table_queries{
+	var result []mem_table_queries
+	var rows []mem_table_queries
+
+
+	fmt.Println("000000000000000000000000000000000000000000000000000000000000000000")
+	fmt.Println("Final Contract Object")
+	fmt.Println("000000000000000000000000000000000000000000000000000000000000000000")
+	// jsonStr := fmt.Sprintf(jsonStr, table.Name , table.Alias ,string(jsonFilter))
+	
+	var jsonStr = `
+	{
+	"query":"%s"
+	}
+	`
+
+	for _, ir := range peer {
+		jsonStr1 := fmt.Sprintf(jsonStr, query)
+		fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+		fmt.Println(jsonStr1)
+		fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
+		jsonMap := make(map[string]interface{})
+		errMap := json.Unmarshal([]byte(jsonStr1), &jsonMap)
+		if errMap != nil{
+			fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&ERROR")
+			fmt.Println(errMap)
+
+		}
+		url := "/" + ir.Name +  "/execute_query"
+		_port, _ := strconv.Atoi(ir.Port)
+		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
+
+		fmt.Println(jsonMap)
+		
+		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		if (err != nil){
+			fmt.Println(err)
+		}else{
+			if response != nil {
+				intermediate_inteface := response.([]interface{})
+				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+				
+				reader := bytes.NewReader(json_rows_bytes)
+				dec := json.NewDecoder(reader)
+				dec.DisallowUnknownFields()
+
+				err = dec.Decode(&rows)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				result = append(result, rows...)
+				break
+			}
+		}
+	}
+
+	return result
+}
+
+func GetQueryDataFromShard(peer [] peers, tables [] SqlClause, logic_filters Filter) []mem_table_queries{
+	var result []mem_table_queries
+	var rows []mem_table_queries
+	var innerObjectType TypeContract
+	ParseObjectTypeToContract(logic_filters, &innerObjectType)
+	jsonFilter, _ := json.Marshal(&logic_filters) 
+	jsonTables, _ := json.Marshal(&tables)
+	jsonContract, _ := json.Marshal(&innerObjectType)
+
+	fmt.Println("000000000000000000000000000000000000000000000000000000000000000000")
+	fmt.Println("Final Contract Object")
+	fmt.Println("000000000000000000000000000000000000000000000000000000000000000000")
+	fmt.Println(innerObjectType)
+	// jsonStr := fmt.Sprintf(jsonStr, table.Name , table.Alias ,string(jsonFilter))
+	
+	var jsonStr = `
+	{
+	"tables":%s,
+	"filter":%s,
+	"contract":%s
+	}
+	`
+
+	for _, ir := range peer {
+		jsonStr1 := fmt.Sprintf(jsonStr,string(jsonTables), string(jsonFilter), string(jsonContract))
+		fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+		fmt.Println(jsonStr1)
+		fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
+		jsonMap := make(map[string]interface{})
+		errMap := json.Unmarshal([]byte(jsonStr1), &jsonMap)
+		if errMap != nil{
+			fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&ERROR")
+			fmt.Println(errMap)
+
+		}
+		url := "/" + ir.Name +  "/query_data_sharding_rsocket"
+		_port, _ := strconv.Atoi(ir.Port)
+		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
+
+		fmt.Println(jsonMap)
+		
+		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		if (err != nil){
+			fmt.Println(err)
+		}else{
+			if response != nil {
+				intermediate_inteface := response.([]interface{})
+				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+				
+				reader := bytes.NewReader(json_rows_bytes)
+				dec := json.NewDecoder(reader)
+				dec.DisallowUnknownFields()
+
+				err = dec.Decode(&rows)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				result = append(result, rows...)
+			}
+		}
+	}
+
+	return result
+}
+
+
+func select_data_where_worker_contains_rsocket_sql(payload interface{}, querySql string) interface{}{
+	logic_filters := payload.(Filter)
+	ctx :=  make(map[string] interface{})
+	var tableWorking []SqlClause 
+	_query := make(map[string] []mem_table_queries)
+	ctx["_query"] = _query
+	_analyzedFilterList := make(map[string]int)
+	ctx["_analyzedFilterList"] = _analyzedFilterList
+	ctx["_querysql"] = querySql
+
+	//Distribute here the call to other instances.
+	filteredResult := selectFieldsDecoupled2(logic_filters, logic_filters, 0, tableWorking,"", &ctx)
 	// _query_temp_tables = nil
 
 	// _currentQueryId = 0
@@ -409,8 +700,18 @@ func select_data_where_worker_contains_rsocket_sql(payload interface{}) interfac
 
 	return filteredResult
 }
+func checkIfImInPeers(peersToAnalyze []peers) bool{
+	result := false
+	for _, currentPeer := range peersToAnalyze{
+		if currentPeer.Name == configs_file.Instance_name{
+			result = true
+			break
+		}
+	}
+	return result
+}
 
-func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, indexFilter int, aliasSubquery string, ctx * map[string] interface{}) interface {} {
+func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, indexFilter int, tables[] SqlClause , aliasSubquery string, ctx * map[string] interface{}) interface {} {
 	var tableResult []mem_table_queries
 	futureAliasSubquery:=""
 	_query := (*ctx)["_query"].((map[string] []mem_table_queries))
@@ -421,30 +722,62 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 	}
 	if aliasSubquery != "" && futureAliasSubquery == "" { futureAliasSubquery = aliasSubquery}
 	indexFilter++
-
+	(*ctx)["_indexFilter"] = indexFilter
 	for _, filter := range  logic_filters.ChildFilters {
-		tableResult = selectFieldsDecoupled2(filter, fullLogicFilters, indexFilter, futureAliasSubquery, ctx).([]mem_table_queries)
+		tableResult = selectFieldsDecoupled2(filter, fullLogicFilters, indexFilter, tables, futureAliasSubquery, ctx).([]mem_table_queries)
 	}
 
+	
 
 
 	//If is a select_to_show clause I need to Check the SelectClause and if there is no table, I create one in the in memory qyery
 	if len(logic_filters.ChildFilters) > 0{
 		if (len(logic_filters.ChildFilters[0].SelectClause ) > 0 ) {
 
-			tables := lookForRelatedTablesInFilters2(logic_filters, indexFilter)
+			tables = lookForRelatedTablesInFilters2(logic_filters, indexFilter)
 			var tableWorking []string 
+			// TODO
+			// Get the Sharding strategy. After that send to the correspondent nodes via select_data_where_worker_contains_rsocket_sql with the filters 
+			// and fill tableResult. If data is retrieved from other nodes, and the sharding strategy is TABLE check tables that were used already (remove from tables list)
+			// 
+			fmt.Println("----------------------------------------------------------------------------------")
+			fmt.Println("BEFORE Sharding Type = Table")
+			fmt.Println(configs_file)
+			fmt.Println("----------------------------------------------------------------------------------")
+
+
+			if strings.ToLower(configs_file.Sharding_type) == "table"{
+				fmt.Println("----------------------------------------------------------------------------------")
+				fmt.Println("Got in Sharding Type = Table")
+				fmt.Println("----------------------------------------------------------------------------------")
+				peer, tablesOutOfHash := GetShardingForTables(tables)
+				if len(tablesOutOfHash) < 1 && checkIfImInPeers(peer) == false{
+					_querySql := (*ctx)["_querysql"].(string)
+					tableResult = GetQueryDataFromShardQuery(peer, _querySql)
+					return tableResult
+				}else{
+					//Querying tables out of shard
+				}
+			}
+			//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 			checkForTablesInNodes(tables, logic_filters, ctx)
+			fmt.Println("----------------------------------------------------------------------------------")
+			fmt.Println("The Tables")
+			fmt.Println(tables)
+			fmt.Println("----------------------------------------------------------------------------------")
 			if len(tables) > 0 {
 				for _, table := range tables{
 					//Check existance in query_objects
 					foundMemTable := isInQueryObject(table, ctx)
 					if !foundMemTable {
 						//Check existance in (index_ for distributed) mem_table
-						//Good place to fetch distributed data
 						if isInMemTable(table, logic_filters.ChildFilters[0].SelectClause, ctx) == false{
+							fmt.Println("----------------------------------------------------------------------------------")
+							fmt.Println("Not In MemTable")
+							fmt.Println(tables)
+							fmt.Println("----------------------------------------------------------------------------------")
 							if reflect.TypeOf(table.SelectableObject) ==  reflect.TypeOf(fullLogicFilters){
-								tableResult = selectFieldsDecoupled2(table.SelectableObject.(Filter), fullLogicFilters, indexFilter, futureAliasSubquery, ctx).([]mem_table_queries)
+								tableResult = selectFieldsDecoupled2(table.SelectableObject.(Filter), fullLogicFilters, indexFilter, tables, futureAliasSubquery, ctx).([]mem_table_queries)
 							}else{
 								var columns map[string]interface{}
 								for _, column := range logic_filters.SelectClause{
@@ -459,6 +792,10 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 								tableResult = append(tableResult, newRow)
 							} //I need to return the name of the table I'm working, get it in the mem_query and apply filters on the way back. I just insert on the mem query what is according to Filter
 						}else{
+							fmt.Println("----------------------------------------------------------------------------------")
+							fmt.Println("Yes In MemTable")
+							fmt.Println(tables)
+							fmt.Println("----------------------------------------------------------------------------------")
 							if ( table.Alias != ""){
 								tableWorking = append(tableWorking , table.Alias)
 							}else{
@@ -467,11 +804,23 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 							tableResult = GetTableSummarize(tableWorking, logic_filters, logic_filters.ChildFilters[0].SelectClause, aliasSubquery, indexFilter, ctx)
 						}
 					}else{
+
 						if ( table.Alias != ""){
 							tableWorking = append(tableWorking , table.Alias)
 						}else{
 							tableWorking = append(tableWorking , table.Name)
 						}
+
+						fmt.Println("----------------------------------------------------------------------------------")
+						fmt.Println("Yes In MemTable")
+						fmt.Println("ctx:")
+						fmt.Println(*ctx)
+						fmt.Println("tableWorking:")
+						fmt.Println(tableWorking)
+						fmt.Println("ChildFilters[0].SelectClause:")
+						fmt.Println(logic_filters.ChildFilters[0].SelectClause)
+
+						fmt.Println("----------------------------------------------------------------------------------")
 						
 						tableResult = GetTableSummarize(tableWorking, logic_filters, logic_filters.ChildFilters[0].SelectClause, aliasSubquery, indexFilter, ctx)
 					}
@@ -481,7 +830,7 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 			}
 		}
 	}
-	
+	fmt.Println(tableResult)
 	return  tableResult
 }
 // var _query_table_id int = 0
@@ -489,6 +838,8 @@ func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause
 	var tableResult []mem_table_queries
 	_query := (*ctx)["_query"].(map[string] []mem_table_queries)
 	tableWrite := ""
+	fmt.Println("----------------------------------------------------------------------------------")
+	fmt.Println("GetTableSummarize")
 
 	if aliasSubquery != ""{
 		tableWrite = aliasSubquery
@@ -504,7 +855,9 @@ func GetTableSummarize(tables [] string, filter Filter, selectObject []SqlClause
 				for _, column := range selectObject{
 					if !checkSelectStar(column, &columns, _query[table][index]){
 						columnResult := ProjectColumns(_query[table][index], column, ctx)
-					
+						fmt.Println("----------------------------------------------------------------------------------")
+						fmt.Println("Not Star")
+						fmt.Println(columnResult)
 						if (column.Alias != ""){
 							columnResult.Alias = column.Alias
 						}// columnResult.Name = column.Name
@@ -552,7 +905,10 @@ func ProjectColumns(row mem_table_queries, column SqlClause,  ctx * map[string] 
 	// columns := make(map[string]interface{})
 	var conditionValidation Condition
 	var columnReturn SqlClause
+	var columnManSqlClause SqlClause
 	if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation){
+		fmt.Println("*****************************************")
+		fmt.Println("Found type of the column - CommandTree")
 		clause := column.SelectableObject.(sqlparserproject.CommandTree)
 		// columns[clause.Clause] = make(map[string]interface{})
 		rowColumn, found := CheckColumnExistance(row, clause)
@@ -567,10 +923,20 @@ func ProjectColumns(row mem_table_queries, column SqlClause,  ctx * map[string] 
 		
 	}else{
 		if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(conditionValidation){
+			fmt.Println("*****************************************")
+			fmt.Println("Found type of the column - Condition")
 			columnReturn = GetConditionFlow(row, column, ctx)
-		} else if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(columnReturn){
+		} else if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(columnReturn) || reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(columnManSqlClause){
+			fmt.Println("*****************************************")
+			fmt.Println("Found type of the column - SqlClause")
 			columnReturn = column.SelectableObject.(SqlClause)
 		}else{
+			fmt.Println("*****************************************")
+			fmt.Println("Not finding type of the column")
+
+			fmt.Println(reflect.TypeOf(column.SelectableObject))
+			fmt.Println(reflect.TypeOf(columnReturn))
+			fmt.Println(column.SelectableObject)
 			columnReturn = column
 		}
 	}
@@ -597,6 +963,12 @@ func checkSelectStar(columnResult SqlClause, columns * map[string]interface{}, r
 func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx * map[string] interface{}){
 	
 	_query := (*ctx)["_query"].((map[string] []mem_table_queries))
+	_indexFilter := (*ctx)["_indexFilter"].(int)
+
+	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("IndexFilter")
+	fmt.Println(_indexFilter)
+	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
 	for _, table := range tables {
 		//Search in nodes
@@ -609,7 +981,7 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx * map[string] 
 		`
 		//need to check the safety of doing this in parallel
 		isInMemTable(table, filter.ChildFilters[0].SelectClause, ctx)
-		if (configs_file.ShardingType == "" ){
+		if (configs_file.Sharding_type != "" ){
 			return
 		}
 		for _, ir := range configs_file.Peers {
@@ -667,13 +1039,27 @@ func select_table(payload interface{}) interface{}{
 
 	table_name := payload_content["table"].(string)
 	alias := payload_content["alias"].(string)
-	// filter := payload_content["filter"].(string)
+	// filter := payload_content["filter"].(Filter)
+	// fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	// fmt.Println("CHECKING FILTER")
+	// fmt.Println(filter)
+	// fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	// lookForFinalFiltersInFilters2
 	
+	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("Result for distributed Query in Node")
+	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	var rows_result []mem_table_queries
 	for _, row := range mt.Rows {
 		if row.Table_name == table_name{
 
 			//Need to apply some logic to filter unecessary data
+			// side, clause := CheckWhichSideContainsColumn(leftValue, rightValue)
+			// if side == 1 || side == 2{}
+			// for f, _ range filter
+			// if GetFilterAndFilter2(){}
+
+
 			if alias != ""{
 				table_name = alias
 			}
@@ -681,12 +1067,25 @@ func select_table(payload interface{}) interface{}{
 			rows_result = append(rows_result, rowMemQuery)
 		}
 	}
+	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("Result for distributed Query in Node")
+	fmt.Println(rows_result)
+	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
 	return rows_result
 }
 
 
 func lookForRelatedTablesInFilters2(fullLogicFilters Filter, level int) []SqlClause{
+	var tables []SqlClause
+	if len(fullLogicFilters.TableObject) > 0 {
+		tables = append(tables, fullLogicFilters.TableObject...)
+	}
+	return tables
+}
+
+func lookForFinalFiltersInFilters2(fullLogicFilters Filter, level int) []SqlClause{
+	// check for filters of type numeric or string, to filter in the worker nodes 
 	var tables []SqlClause
 	if len(fullLogicFilters.TableObject) > 0 {
 		tables = append(tables, fullLogicFilters.TableObject...)
@@ -1110,4 +1509,5 @@ func GetClauseFromValue(interfaceValue interface{}) sqlparserproject.CommandTree
 	return clause
 
 }
+
 

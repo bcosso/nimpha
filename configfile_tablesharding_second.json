@@ -1,0 +1,12 @@
+{
+"path": "C:\\Bruno\\TestFolder\\",
+"peers": [{"name": "traira", "ip": "127.0.0.1", "port":"10000"}, {"name": "velho_bicha", "ip": "127.0.0.1", "port":"10001"}], 
+"number_replicas": "1",
+"max_heap_size": "40",
+"instance_name": "velho_bicha",
+"instance_port": "10001",
+"instance_ip": "127.0.0.1",
+"sharding_type": "table",
+"sharding_groups": [{"sharding_group_id":1, "replicas": [1]}],
+"sharding_strategy": {"tableclient":{"sharding_group_id":1}, "tableaddress":{"sharding_group_id":1}}
+}
