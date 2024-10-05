@@ -467,7 +467,8 @@ func read_wal_strategy_rsocket(payload interface{})  interface{} {
 	
 	if strings.ToLower(configs_file.Sharding_type) == "table"{
 		//TODO: GetTableName
-		var tableNames []string
+		tableNames := []string { p.Table_name }
+
 		replicationPoints = GetShardingStrategy("", tableNames)
 	}else if configs_file.Sharding_column != ""{
 		if p.Parsed_Document[configs_file.Sharding_column] != nil{
@@ -551,6 +552,9 @@ func GetShardingStrategy(columnValue string, tableNames [] string) []peers{
 		//TODO:
 		//Sharded by table
 		//for each table in Tablenames, Read from a Hashtable in which node it can reside.Don't repeat nodes in the final result.
+		if (len(tableNames) > 0){
+			shards, _ = GetShardingForTables(tableNames)
+		}
 	}
 
 	// if (configs_file.ShardingType != ""){
@@ -559,7 +563,7 @@ func GetShardingStrategy(columnValue string, tableNames [] string) []peers{
 	// 	}
 	// 	return shards 
 	// }
-	return nil
+	return shards
 }
 func GetReplicationNodesIncludingMyself()[]peers{
 	return configs_file.Peers

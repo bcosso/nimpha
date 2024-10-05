@@ -486,8 +486,74 @@ func query_data_sharding_rsocket(payload interface{}) interface{}{
 	return filteredResult
 }
 
+
+func ParseSqlClauseToStringTables(tables [] SqlClause) []string{
+	var tablesResult []string
+	for _, tb := range tables {
+		tablesResult = append(tablesResult, tb.Name)
+	}
+	return tablesResult
+}
+
 // var hashOfTablesToPeers map[string] []Peer
-func GetShardingForTables(tables [] SqlClause) ( []peers, []string){
+// func GetShardingForTables(tables [] SqlClause) ( []peers, []string){
+// 	var peersResult []peers
+// 	var tablesOutOfHash [] string
+// 	fmt.Println("-----------------------------------------------------")
+// 	fmt.Println("Tables:")
+// 	fmt.Println(tables)
+// 	fmt.Println("-----------------------------------------------------")
+// 	for _, tb := range tables {
+// 		//create new table with hash (map) for table name containing a peer or a peer name,
+// 		// check if exists in peerResult, if yes, add to tablesOutOfHash  
+// 		fmt.Println("-----------------------------------------------------")
+// 		fmt.Println("ShardingStrategies:")
+// 		fmt.Println(configs_file.Sharding_strategy)
+// 		fmt.Println(tb.Name)
+// 		fmt.Println("-----------------------------------------------------")
+// 		val, ok := configs_file.Sharding_strategy[tb.Name]
+// 		// valAlias, okAlias := configs_file.ShardingGroup[tb.Alias] // That's actually not needed, check again and remove it
+// 		if !ok {
+// 			// panic("Table not found in shards")
+// 			tablesOutOfHash =  append(tablesOutOfHash, tb.Name)
+// 			break
+// 		}
+		
+// 		fmt.Println("-----------------------------------------------------")
+// 		fmt.Println(val)
+// 		fmt.Println("-----------------------------------------------------")
+
+// 		// if len(val) == 0 { val = valAlias }
+// 		if len(peersResult) == 0{
+
+// 			peersResult = append(peersResult, getReplicasFromShardGroup(configs_file.Sharding_groups[val.Sharding_group_id - 1].Replicas)...)
+// 			fmt.Println("-----------------------------------------------------")
+// 			fmt.Println("Got the PEERs")
+// 			fmt.Println(peersResult)
+// 			fmt.Println("-----------------------------------------------------")
+// 		}else{
+// 			for _, v := range getReplicasFromShardGroup(configs_file.Sharding_groups[val.Sharding_group_id - 1].Replicas){
+// 				containsPeer := false
+// 				for _, p := range peersResult{
+// 					if (v.Name == p.Name){
+// 						containsPeer = true
+// 					}
+// 				}
+// 				if containsPeer == false{
+// 					// peerResult = nil
+// 					tablesOutOfHash = append(tablesOutOfHash, v.Name)
+// 					// break;
+// 				}
+// 			}
+// 		}
+// 		// otherwise add to peerResult 
+// 		fmt.Println(val)
+
+// 	}
+// 	return peersResult, tablesOutOfHash
+// }
+
+func GetShardingForTables(tables [] string) ( []peers, []string){
 	var peersResult []peers
 	var tablesOutOfHash [] string
 	fmt.Println("-----------------------------------------------------")
@@ -500,13 +566,13 @@ func GetShardingForTables(tables [] SqlClause) ( []peers, []string){
 		fmt.Println("-----------------------------------------------------")
 		fmt.Println("ShardingStrategies:")
 		fmt.Println(configs_file.Sharding_strategy)
-		fmt.Println(tb.Name)
+		fmt.Println(tb)
 		fmt.Println("-----------------------------------------------------")
-		val, ok := configs_file.Sharding_strategy[tb.Name]
+		val, ok := configs_file.Sharding_strategy[tb]
 		// valAlias, okAlias := configs_file.ShardingGroup[tb.Alias] // That's actually not needed, check again and remove it
 		if !ok {
 			// panic("Table not found in shards")
-			tablesOutOfHash =  append(tablesOutOfHash, tb.Name)
+			tablesOutOfHash =  append(tablesOutOfHash, tb)
 			break
 		}
 		
@@ -543,6 +609,7 @@ func GetShardingForTables(tables [] SqlClause) ( []peers, []string){
 	}
 	return peersResult, tablesOutOfHash
 }
+
 
 func getReplicasFromShardGroup (groupSharding [] int) []peers{
 	var resultPeers [] peers
@@ -750,7 +817,7 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 				fmt.Println("----------------------------------------------------------------------------------")
 				fmt.Println("Got in Sharding Type = Table")
 				fmt.Println("----------------------------------------------------------------------------------")
-				peer, tablesOutOfHash := GetShardingForTables(tables)
+				peer, tablesOutOfHash := GetShardingForTables(ParseSqlClauseToStringTables(tables))
 				if len(tablesOutOfHash) < 1 && checkIfImInPeers(peer) == false{
 					_querySql := (*ctx)["_querysql"].(string)
 					tableResult = GetQueryDataFromShardQuery(peer, _querySql)
