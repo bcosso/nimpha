@@ -17,11 +17,12 @@ TODO:
  - ~~Replication of WAL~~- WAL is replicated and on error (node down) triggers a data recovery event in one of the nodes
  - ~~Replication of data~~
  - Indexing mechanism (BTREE partially implemented)
+ - ~~Sharding - Sharding strategy : TABLE~~
  - Sharding - Sharding strategies : Alphabetic order, index range, ...? 
  - ~~Convert from HTTP to a protocol lower in the OSI model~~ Done with RSOCKET
  - Remove non rsocket communication
  - refactor code to Golang standard naming convention. Started with snake case but had to change due to Golang standards.
- - Drivers for usage by client systems
+ - ~~Drivers for usage by client systems (Created HTTP load balancer.~~ Clients should use post requests
 
 TODO Parser:
  - INSERT
