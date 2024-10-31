@@ -201,6 +201,10 @@ func handleRequests_rsocket(configs *config ) {
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_successful_nodes_wal", UpdateSuccessfulNodesWal) 
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/trigger_recover_data_nodes", TriggerRecoverDataInNodes)
 	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/query_data_sharding_rsocket", query_data_sharding_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_server_free_memory", get_server_free_memory)
+	
+
+	fmt.Println(configs.Instance_Port)
 	// 
 	// TriggerRecoverDataInNodes
 
