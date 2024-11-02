@@ -22,7 +22,7 @@ TODO:
  - ~~Convert from HTTP to a protocol lower in the OSI model~~ Done with RSOCKET
  - Remove non rsocket communication
  - refactor code to Golang standard naming convention. Started with snake case but had to change due to Golang standards.
- - ~~Drivers for usage by client systems (Created HTTP load balancer.~~ Clients should use post requests
+ - ~~Drivers for usage by client systems~~ (Created HTTP load balancer. Clients should use post requests
 
 TODO Parser:
  - INSERT
