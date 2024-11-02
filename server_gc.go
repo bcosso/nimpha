@@ -1,19 +1,18 @@
 package main
 
 import (
-	"fmt"
-	"time"
-	"io/ioutil"
 	"encoding/json"
-	"runtime"
-	"syscall"
+	"fmt"
+	"io/ioutil"
+	"time"
+	// "syscall"
 )
 
 const data_interval = 10000
 const wal_interval = 1000
 
 func dump_data(s string) {
-	for (true){
+	for true {
 		time.Sleep(data_interval * time.Millisecond)
 		dump_it(s)
 		dump_mt(s)
@@ -23,15 +22,15 @@ func dump_data(s string) {
 func dump_mt(s string) {
 	file, _ := json.MarshalIndent(mt, "", " ")
 	_ = ioutil.WriteFile("mem_table.json", file, 0644)
-   fmt.Println(s)
-   //fmt.Println(mt)
+	fmt.Println(s)
+	//fmt.Println(mt)
 }
 
 func dump_wal(s string) {
-	for (true){
+	for true {
 		time.Sleep(wal_interval * time.Millisecond)
 		file, _ := json.MarshalIndent(wal, "", " ")
- 		_ = ioutil.WriteFile("wal_file.json", file, 0644)
+		_ = ioutil.WriteFile("wal_file.json", file, 0644)
 		fmt.Println(s)
 		//fmt.Println(mt)
 	}
@@ -42,41 +41,23 @@ func dump_it(s string) {
 	_ = ioutil.WriteFile("index_table.json", file, 0644)
 }
 
-func check_os() uintptr{
-	var result uintptr
-	switch runtime.GOOS{
-	case "windows":
-		result = getWindowsMemory()
-		break
-	default:
-		break
-	}
-	return result
+func checkFreeMemory() int64 {
+	return getFreeMemory()
 }
 
-func getWindowsMemory() uintptr{
-	memtest, errFindingLib        := syscall.LoadLibrary("MemoryDiag.dll")
-		if (errFindingLib != nil){
-			panic(errFindingLib)
-		}
+/*
+#include <stdio.h>
+#include <unistd.h>
 
-		getModuleHandle, errFindingMethod := syscall.GetProcAddress(memtest, "getMemory")
-		if (errFindingMethod != nil){
-			panic(errFindingMethod)
-		}
-		var nargs uintptr = 0
-		if ret, _, callErr := syscall.Syscall(uintptr(getModuleHandle), nargs, 0, 0, 0); callErr != 0 {
-			panic(callErr)
-		} else {
-			fmt.Println("Result:")
-			fmt.Println(ret)
-			return ret
-		}
+unsigned long getTotalSystemMemory()
+{
+    long pages = sysconf(_SC_AVPHYS_PAGES);
+    long page_size = sysconf(_SC_PAGE_SIZE);
+    return pages * page_size;
 }
+*/
 
-func get_server_free_memory(payload interface{}) interface{}{
-	mem:=check_os()
+func get_server_free_memory(payload interface{}) interface{} {
+	mem := checkFreeMemory()
 	return mem
 }
-
-
