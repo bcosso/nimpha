@@ -25,7 +25,9 @@ TODO:
  - ~~Drivers for usage by client systems~~ (Created HTTP load balancer. Clients should use post requests
 
 TODO Parser:
- - INSERT
+ - ~~INSERT~~
+ - DELETE
+ - UPDATE
  - ~~select with subqueries~~
  - Select without where clause
  - Mathematical operations
