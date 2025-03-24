@@ -153,7 +153,7 @@ func insertData(payload interface{}) interface{} {
 	//Need to add multiple sharding strategies: per table, per range and per alphabetical order.
 	//Add eventual consistency and replication:
 	//Replication triggered at the same time to a different node in either eventual consistency or strong consistency
-	GetNextNodesToInsertAndWriteWal(&coll)
+	GetNextNodesToInsertAndWriteWal(&coll, "", "insert")
 
 	return "ok"
 }
@@ -163,6 +163,8 @@ func insertDataJsonBody(payload interface{}) interface{} {
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
 	json.Unmarshal([]byte(myString), &payload_content)
+	query := ""
+	operationType := ""
 
 	// ConsistencyStrategy := ""
 	// _, found := payload_content["connectionConfig"]
@@ -178,6 +180,11 @@ func insertDataJsonBody(payload interface{}) interface{} {
 	var coll []mem_row
 	// result.Key_id = ikey_id
 	result.Table_name = payload_content["table"].(string)
+	_, hasQuery := payload_content["query_sql"]
+	if hasQuery {
+		query = payload_content["query_sql"].(string)
+		operationType = payload_content["operation_type"].(string)
+	}
 
 	// mapResult := make(map[string]interface{})
 	// err := json.Unmarshal([]byte(payload_content["body"].(string)), &mapResult)
@@ -188,7 +195,7 @@ func insertDataJsonBody(payload interface{}) interface{} {
 	intermediate_inteface := payload_content["body"].(map[string]interface{})
 	result.Parsed_Document = intermediate_inteface
 	coll = append(coll, result)
-	GetNextNodesToInsertAndWriteWal(&coll)
+	GetNextNodesToInsertAndWriteWal(&coll, query, operationType)
 
 	return "ok"
 }

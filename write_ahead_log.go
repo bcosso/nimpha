@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -394,7 +395,7 @@ func get_wal_rsocket(data_post *[]mem_row) int {
 	//fmt.Fprintf(w, strconv.Itoa(index_row.Current_index))
 }
 
-func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row) {
+func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operation string) {
 
 	index_row := it.Index_rows[it.Index_WAL]
 	json_data, err := json.Marshal(data_post)
@@ -405,7 +406,9 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row) {
 
 	var param interface{}
 	param = map[string]interface{}{
-		"body": string(json_data),
+		"body":           string(json_data),
+		"query_sql":      query,
+		"operation_type": operation,
 	}
 
 	jsonParam, _ := json.Marshal(param)
@@ -432,7 +435,17 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row) {
 // //////////////////////////////////////////////////////////////////////////////////////////////////////////
 func read_wal_strategy_rsocket(payload interface{}) interface{} {
 
-	p, intermediate_inteface := GetParsedDocumentToMemRow(payload)
+	fullPayload := make(map[string]interface{})
+
+	var myString string
+	if reflect.TypeOf(myString) == reflect.TypeOf(payload) {
+		myString = payload.(string)
+		json.Unmarshal([]byte(myString), &fullPayload)
+	} else if reflect.TypeOf(fullPayload) == reflect.TypeOf(payload) {
+		fullPayload = payload.(map[string]interface{})
+	}
+
+	p, intermediate_inteface := GetParsedDocumentToMemRow(fullPayload["body"])
 	//Check persistence of it (to ensure up to date Index_id everywhere in the cluster)
 	it.Index_id++
 	p.Key_id = it.Index_id
@@ -458,17 +471,23 @@ func read_wal_strategy_rsocket(payload interface{}) interface{} {
 	if replicationPoints == nil || len(replicationPoints) < 1 {
 		replicationPoints = GetReplicationNodesIncludingMyself() // returns list of nodes where data should be shared if there is no sharding strategy, returns nil. IF nil, just replicate data to all nodes.
 	}
-
+	query := fullPayload["query_sql"].(string)
+	operation := fullPayload["operation_type"].(string)
 	//Level of Consistency choice : Eventual or full (WHEN SHARDING and/or REPLICATING) If a node is down, it will demand recovery, using the accumulated write ahead log
 	// var wg sync.WaitGroup
 	var jsonStr = `
 	{
 	"body":%s,
-	"instance_list":%s
+	"instance_list":%s,
+	"query_sql":"%s",
+	"operation_type":"%s"
 	}
 	`
 	jsonList, _ := json.Marshal(replicationPoints)
-	jsonStr = fmt.Sprintf(jsonStr, intermediate_inteface, string(jsonList))
+	jsonStr = fmt.Sprintf(jsonStr, intermediate_inteface, string(jsonList), query, operation)
+
+	fmt.Println("::::::::::::::::::::")
+	fmt.Println(jsonStr)
 
 	var hadError bool = false
 	var successfulRow int
@@ -564,6 +583,16 @@ func UpdateWal(payload interface{}) interface{} {
 	}
 	var wo wal_operation
 	wo.Rows = append(wo.Rows, row)
+	queryInterface, err := GetAttributeFromPayload("query_sql", payload)
+	if err != nil {
+		fmt.Println("*******************")
+		fmt.Println(payload)
+		fmt.Println(err)
+	} else {
+		wo.Query = queryInterface.(string)
+		operationTypeInterface, _ := GetAttributeFromPayload("operation_type", payload)
+		wo.Operation_type = operationTypeInterface.(string)
+	}
 
 	for _, instance := range listInstances {
 		instanceToUpdate := ActiveInstances{InstanceName: instance.Name}
@@ -571,9 +600,14 @@ func UpdateWal(payload interface{}) interface{} {
 	}
 
 	wal = append(wal, wo)
-
 	jsonParam, _ := json.Marshal(param)
-	insertWorker(string(jsonParam))
+	if wo.Operation_type == "delete" {
+		//call execute_query locally instead with the query
+		execute_query_delete(wo.Query)
+		// deleteWorkerOld(string(jsonParam))
+	} else {
+		insertWorker(string(jsonParam))
+	}
 
 	return "Ok"
 }
@@ -618,9 +652,11 @@ func TryRecoverData() (bool, []error) {
 						rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
 						var param interface{}
 						param = map[string]interface{}{
-							"key_id": strconv.Itoa(row.Key_id),
-							"table":  row.Table_name,
-							"body":   row,
+							"key_id":         strconv.Itoa(row.Key_id),
+							"table":          row.Table_name,
+							"body":           row,
+							"query_sql":      wo.Query,
+							"operation_type": wo.Operation_type,
 						}
 						_, err := rsocket_json_requests.RequestJSON("/"+index_row.Name+"/update_wal_new", param)
 						if err != nil {
