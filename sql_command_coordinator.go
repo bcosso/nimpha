@@ -377,48 +377,17 @@ func setColumnsToBeInsertedToFilter(tree sqlparserproject.CommandTree, filter *F
 }
 
 func parseFilterConditionsToJson(filter *Filter) string {
-	//Either create StringBuilder-like or do it with reflection
-	result := "{"
-	comma := ""
+	jsonMap := make(map[string]interface{})
+	result := ""
 	for _, innerFilter := range filter.ChildFilters {
-		// leaf := innerFilter.CommandLeft.(sqlparserproject.CommandTree)
-		leaf1 := innerFilter.CommandLeft.(SqlClause)
-		leaf := leaf1.SelectableObject.(sqlparserproject.CommandTree)
-
-		leafAlias := leaf.Clause
-		// if leaf.Alias != "" {
-		// 	leafAlias = leaf.Alias
-		// } else {
-		// 	leafAlias = leaf.ClauseName
-		// }
-		fmt.Println("++++++++++Left and right+++++++++++++")
-		fmt.Println(innerFilter.CommandLeft)
-		fmt.Println(innerFilter.CommandRight)
-		value1 := innerFilter.CommandRight.(SqlClause)
-		value := ""
-		var test_int int
-
-		//Need to cover more cases
-		if reflect.TypeOf(value1.SelectableObject) == reflect.TypeOf(value) {
-			value = "\"" + value1.SelectableObject.(string) + "\""
-		} else if reflect.TypeOf(value1.SelectableObject) == reflect.TypeOf(test_int) {
-			value = strconv.Itoa(value1.SelectableObject.(int))
-		}
-
-		result += comma + "\"" + leafAlias + "\":" + value
-		comma = ","
-
+		leaf := innerFilter.CommandLeft.(SqlClause)
+		leafKey := leaf.SelectableObject.(sqlparserproject.CommandTree)
+		leafValue := innerFilter.CommandRight.(SqlClause)
+		jsonMap[leafKey.Clause] = leafValue.SelectableObject
 	}
-	result += "}"
+	resultBytes, _ := json.Marshal(jsonMap)
+	result = string(resultBytes)
 	return result
-	// mapResult := make(map[string]interface{})
-	// err := json.Unmarshal([]byte(result), &mapResult)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-
-	// return mapResult
-
 }
 
 func insertFromJson(tableName string, jsonData string, query string, operationType string) {
