@@ -106,7 +106,7 @@ type ActiveInstances struct {
 
 var it index_table = get_index_table()
 var mt mem_table
-var wal []wal_operation
+var wal map[string]wal_operation
 var configs_file config
 
 //Client Facing Methods //
@@ -152,8 +152,6 @@ func handleRequests(configs *config) {
 	myRouter.HandleFunc("/"+configs.Instance_name+"/get_slices_worker", get_slices_worker)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/update_index_manager", update_index_manager)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/load_mem_table", load_mem_table)
-	myRouter.HandleFunc("/"+configs.Instance_name+"/read_wal", read_wal)
-	myRouter.HandleFunc("/"+configs.Instance_name+"/update_wal", update_wal)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/select_data", select_data)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/select_data_where_worker_equals", select_data_where_worker_equals)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/select_data_where_worker_contains", select_data_where_worker_contains)
@@ -165,15 +163,9 @@ func handleRequests(configs *config) {
 
 func handleRequests_rsocket(configs *config) {
 
-	// Exec("select name_client, client_number, 120 from table1 where client_number = 3 or (name_client = 'teste4' or  client_number = 2 or client_number = 5)")
-	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_all", get_all_rsocket)
-	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_rows", get_rows_rsocket)
-	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_range", get_range_rsocket)
-	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/get_slices_worker", get_slices_worker_rsocket)
-	// rsocket_json_requests.AppendFunctionHandler("/"+ configs.Instance_name + "/update_index_manager", update_index_manager)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/load_mem_table", load_mem_table_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/read_wal", read_wal_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal", update_wal_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal", update_wal_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert", insert_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_worker", insertWorker)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_worker_rsocket", insert_worker_rsocket)
@@ -192,16 +184,14 @@ func handleRequests_rsocket(configs *config) {
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/trigger_recover_data_nodes", TriggerRecoverDataInNodes)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/query_data_sharding_rsocket", query_data_sharding_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/get_server_free_memory", get_server_free_memory)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal_only", UpdateWalOnly)
 
 	fmt.Println(configs.Instance_Port)
-	//
-	// TriggerRecoverDataInNodes
 
 	//	rsocket_json_requests.SetTLSConfig("cert.pem", "key.pem")
 
 	_port, _ := strconv.Atoi(configs.Instance_Port)
 	rsocket_json_requests.RequestConfigsServer(_port)
-
 	rsocket_json_requests.ServeCalls()
 }
 

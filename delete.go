@@ -221,8 +221,6 @@ func deleteWorker(filterLogic *Filter, ctx *map[string]interface{}) interface{} 
 			fmt.Println("Found to delete")
 			fmt.Println("----------------------------------------------------------------------------------")
 			mt.Rows = slices.Delete(mt.Rows, indexRow, indexRow+1)
-			// fmt.Println(row)
-			// fmt.Println(mt.Rows)
 			indexRow--
 		}
 		indexRow++
