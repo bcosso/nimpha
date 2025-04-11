@@ -14,7 +14,6 @@ import (
 
 	"github.com/bcosso/rsocket_json_requests"
 	"github.com/bcosso/sqlparserproject"
-	"github.com/gorilla/mux"
 )
 
 // relationship := Relationship{TableNameRight: clauseRight.Prefix, ColumnLeft: clauseLeft.Clause, ColumnRight: clauseRight.Clause, IndexInMemQuery:indexRight }
@@ -32,146 +31,11 @@ type mem_query_collection struct {
 	TableContent []mem_table_queries
 }
 
-// var _query map[string] []mem_table_queries
-
 type mem_table_queries struct {
 	TableName     string
 	QueryId       int
 	Relationships []Relationship
 	Rows          interface{}
-}
-
-// var _currentQueryId int = 0
-// var _query_temp_tables []mem_table_queries
-
-func get_all(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "retrieve all data from table")
-	fmt.Println("Endpoint Hit: get_all")
-}
-
-func get_rows(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "retrieve rows from table")
-	fmt.Println("Endpoint Hit: get_rows")
-
-	vars := mux.Vars(r)
-	key := vars["id"]
-	operation := vars["op"]
-	table_from := vars["table_from"]
-	i, err := strconv.Atoi(key)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	get_rows_op(i, operation, table_from)
-
-}
-
-func get_range(w http.ResponseWriter, r *http.Request) {
-	fromStr := r.URL.Query().Get("from")
-
-	fmt.Println(" FROM: " + fromStr)
-
-	toStr := r.URL.Query().Get("to")
-	fmt.Println(" TO: " + toStr)
-	table_from := r.URL.Query().Get("table_from")
-
-	from, err := strconv.Atoi(fromStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	to, err := strconv.Atoi(toStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var result []mem_row
-	for _, node := range it.Index_rows {
-		if node.Table_name == table_from &&
-			((node.Index_to >= to && to >= node.Index_from) || (node.Index_to >= from && from >= node.Index_from)) {
-			from_method := get_slices(from, to, node)
-			result = append(result, from_method...)
-			//make it async and combine the results later
-		}
-	}
-	json_rows_bytes, _ := json.Marshal(result)
-	fmt.Fprintf(w, string(json_rows_bytes))
-
-}
-
-func get_rows_op(key int, operation string, table_from string) {
-	switch operation {
-	case "eq":
-		get_rows_equals_to(key, table_from)
-		break
-	case "gt":
-		get_rows_greater_than(key)
-		break
-	case "st":
-		get_rows_smaller_than(key)
-		break
-	}
-}
-
-func get_rows_equals_to(key int, table_from string) []mem_row {
-
-	//get which node I am
-	//check range for the current node
-	//chech it if this node can satisfy	this clause
-
-	var result []mem_row
-	for _, node := range it.Index_rows {
-		if node.Table_name == table_from && node.Index_to <= key && node.Index_from >= key {
-			result = append(get_slices(key, key, node))
-			//make it async and combine the results later
-		}
-	}
-	return result
-
-}
-
-func get_rows_greater_than(key int) []mem_row {
-	var result []mem_row
-	for _, node := range it.Index_rows {
-		if node.Index_to >= key && node.Index_from <= key {
-			result = append(get_slices(key, node.Index_to, node))
-			//make it async and combine the results later
-		} else if node.Index_from >= key {
-			result = append(get_slices(node.Index_from, node.Index_to, node))
-		}
-	}
-	return result
-}
-
-func get_rows_smaller_than(key int) []mem_row {
-	var result []mem_row
-	for _, node := range it.Index_rows {
-		if node.Index_to >= key && node.Index_from <= key {
-			result = append(get_slices(node.Index_from, key, node))
-			//make it async and combine the results later
-		} else if node.Index_to <= key {
-			result = append(get_slices(node.Index_from, node.Index_to, node))
-		}
-	}
-	return result
-}
-
-func get_slices(from int, to int, ir index_row) []mem_row {
-	//if (len(mt.rows) >
-	var rows []mem_row
-	response, err := http.Get("http://" + ir.Instance_ip + ":" + ir.Instance_port + "/" + ir.Instance_name + "/get_slices_worker?from=" + strconv.Itoa(from) + "&to=" + strconv.Itoa(to) + "&table_from=" + ir.Table_name)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	dec := json.NewDecoder(response.Body)
-	dec.DisallowUnknownFields()
-
-	err = dec.Decode(&rows)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return rows
 }
 
 func get_slices_worker(w http.ResponseWriter, r *http.Request) {
@@ -388,15 +252,11 @@ func query_data_sharding_rsocket(payload interface{}) interface{} {
 	var tables []SqlClause
 	var contract TypeContract
 	var filter Filter
-	fmt.Println("----------------------CHEGOU-----------------------------------------------------")
-	fmt.Println(payload)
 
 	payload_content, ok := payload.(map[string]interface{})
 	if !ok {
-		fmt.Println("ERROR!")
+		fmt.Println("ERROR - query_data_sharding_rsocket")
 	}
-	fmt.Println(payload_content)
-	fmt.Println("----------------------CHEGOU-----------------------------------------------------")
 	logic_filters_intermediate := payload_content["filter"]
 	jsonbody_filters, errFilters := json.Marshal(logic_filters_intermediate)
 	if errFilters != nil {
@@ -409,7 +269,6 @@ func query_data_sharding_rsocket(payload interface{}) interface{} {
 		fmt.Println(err)
 	}
 
-	fmt.Println("----------------------CHEGOU2-----------------------------------------------------")
 	tables_intermediate := payload_content["tables"]
 	jsonbody_tables, errTables := json.Marshal(tables_intermediate)
 	if errFilters != nil {
@@ -422,7 +281,6 @@ func query_data_sharding_rsocket(payload interface{}) interface{} {
 		fmt.Println(err)
 	}
 
-	fmt.Println("----------------------CHEGOU3-----------------------------------------------------")
 	contract_intermediate := payload_content["contract"]
 	jsonbody_contract, errContract := json.Marshal(contract_intermediate)
 	if errContract != nil {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"time"
-	// "syscall"
 )
 
 const data_interval = 10000
@@ -44,18 +43,6 @@ func dump_it(s string) {
 func checkFreeMemory() int64 {
 	return getFreeMemory()
 }
-
-/*
-#include <stdio.h>
-#include <unistd.h>
-
-unsigned long getTotalSystemMemory()
-{
-    long pages = sysconf(_SC_AVPHYS_PAGES);
-    long page_size = sysconf(_SC_PAGE_SIZE);
-    return pages * page_size;
-}
-*/
 
 func get_server_free_memory(payload interface{}) interface{} {
 	mem := checkFreeMemory()

@@ -96,50 +96,12 @@ func read_wal_rsocket(payload interface{}) interface{} {
 	return param
 }
 
-func get_wal_rsocket(data_post *[]mem_row) int {
-
-	index_row := it.Index_rows[it.Index_WAL]
-	fmt.Println("-------------data_post and JSON DATA ------------------------")
-	json_data, err := json.Marshal(data_post)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("get_wal::::::")
-	var param interface{}
-	param = map[string]interface{}{
-		"body": string(json_data),
-	}
-
-	jsonParam, _ := json.Marshal(param)
-	fmt.Println(string(jsonParam))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_port, _ := strconv.Atoi(index_row.Instance_port)
-	rsocket_json_requests.RequestConfigs(index_row.Instance_ip, _port)
-	response, err := rsocket_json_requests.RequestJSON("/"+index_row.Instance_name+"/read_wal", string(jsonParam))
-
-	if err != nil {
-		log.Fatal(err)
-		fmt.Println("err::::::")
-	}
-	fmt.Println("res::::::")
-	fmt.Println(":::::::::")
-
-	payload_content, _ := response.(map[string]interface{})
-	p := payload_content["body"].(float64)
-	fmt.Println("-------Response-------")
-	iconv := int(p)
-	return iconv
-
-	//fmt.Fprintf(w, strconv.Itoa(index_row.Current_index))
-}
+var indexWal int = 0
 
 func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operation string) {
 
-	index_row := it.Index_rows[it.Index_WAL]
+	// index_row := it.Index_rows[it.Index_WAL]
+
 	json_data, err := json.Marshal(data_post)
 
 	if err != nil {
@@ -159,17 +121,29 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 		log.Fatal(err)
 	}
 
-	_port, _ := strconv.Atoi(index_row.Instance_port)
-	rsocket_json_requests.RequestConfigs(index_row.Instance_ip, _port)
-	_, err = rsocket_json_requests.RequestJSON("/"+index_row.Instance_name+"/read_wal_strategy", string(jsonParam))
+	counter := 0
 
-	if err != nil {
-		if it.Index_WAL < len(it.Index_rows)-1 {
-			it.Index_WAL++
+	for true {
+		counter++
+		index_row := configs_file.Peers[indexWal]
+		_port, _ := strconv.Atoi(index_row.Port)
+		rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
+		_, err = rsocket_json_requests.RequestJSON("/"+index_row.Name+"/read_wal_strategy", string(jsonParam))
+
+		if err != nil {
+			if counter > len(configs_file.Peers) {
+				fmt.Println("No nodes available as WAL (Write Ahead Log)")
+				break
+			}
+			if indexWal < len(configs_file.Peers)-1 {
+				indexWal++
+			} else {
+				indexWal = 0
+			}
+			fmt.Println("err::::::")
 		} else {
-			it.Index_WAL = 0
+			break
 		}
-		fmt.Println("err::::::")
 	}
 }
 
