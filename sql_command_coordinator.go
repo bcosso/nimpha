@@ -54,7 +54,7 @@ func execute_query(payload interface{}) interface{} {
 	query := payload_content["query"].(string)
 	var action sqlparserproject.ActionExec = ParsingActionExec{}
 	sqlparserproject.SetAction(action)
-	tree := sqlparserproject.Execute_parsing_process(query)
+	tree := sqlparserproject.ExecuteParsingProcess(query)
 	// filterNew := new(Filter)
 	filterNew2 := new(Filter)
 
@@ -80,7 +80,7 @@ func execute_query(payload interface{}) interface{} {
 func execute_query_delete(query string) interface{} {
 	var action sqlparserproject.ActionExec = ParsingActionExec{}
 	sqlparserproject.SetAction(action)
-	tree := sqlparserproject.Execute_parsing_process(query)
+	tree := sqlparserproject.ExecuteParsingProcess(query)
 	filterNew := new(Filter)
 	// result := determineQueryType(tree, filterNew2, query)
 	determineQueryType(tree, filterNew, query, "wal")
