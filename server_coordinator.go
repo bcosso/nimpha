@@ -1,16 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"log"
+	"net"
+	"time"
 
 	// "errors"
-	"os"
-	//"io"
 	"encoding/json"
+	// "io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -111,14 +115,62 @@ var configs_file config
 
 //Client Facing Methods //
 
-func load_mem_table(w http.ResponseWriter, r *http.Request) {
-
-	get_mem_table()
-
-}
-
 func load_mem_table_rsocket(payload interface{}) interface{} {
 	get_mem_table()
+	return payload
+}
+
+func syncData() {
+	conn, err := net.Dial("tcp", "localhost:8000")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	file, err := os.Open("mem_table.json")
+	defer file.Close()
+	io.Copy(conn, file)
+
+	// file2, err := os.Open("wal_file.json")
+	// defer file2.Close()
+	// io.Copy(conn, file2)
+
+	// file3, err := os.Open("index_table.json")
+	// defer file3.Close()
+	// io.Copy(conn, file3)
+}
+
+// Updates cluster configuration on the fly
+func update_configuration(payload interface{}) interface{} {
+	operationInterface, err := GetAttributeFromPayload("operation", payload)
+	if err != nil {
+		fmt.Println("*******************")
+		fmt.Println(payload)
+		fmt.Println(err)
+		return "Error"
+	}
+	operation := operationInterface.(string)
+	switch operation {
+	case "add_node":
+		nodeInterface, err := GetAttributeFromPayload("node", payload)
+		if err != nil {
+			fmt.Println("*******************")
+			fmt.Println(payload)
+			fmt.Println(err)
+			return "Error"
+		}
+		var node peers
+		bytesInt, _ := json.Marshal(nodeInterface)
+		json.Unmarshal(bytesInt, &node)
+		configs_file.Peers = append(configs_file.Peers, node)
+		//save config file to disk
+		syncData()
+		dump_config("------------------------------Config File Updated---------------------------------")
+		break
+	default:
+		break
+	}
+
 	return payload
 }
 
@@ -151,7 +203,6 @@ func handleRequests(configs *config) {
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/get_range", get_range)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/get_slices_worker", get_slices_worker)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/update_index_manager", update_index_manager)
-	myRouter.HandleFunc("/"+configs.Instance_name+"/load_mem_table", load_mem_table)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/select_data", select_data)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/select_data_where_worker_equals", select_data_where_worker_equals)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/select_data_where_worker_contains", select_data_where_worker_contains)
@@ -165,6 +216,7 @@ func handleRequests_rsocket(configs *config) {
 
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/load_mem_table", load_mem_table_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/read_wal", read_wal_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_configuration", update_configuration)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal", update_wal_rsocket)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert", insert_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_worker", insertWorker)
@@ -195,10 +247,76 @@ func handleRequests_rsocket(configs *config) {
 	rsocket_json_requests.ServeCalls()
 }
 
-// Nimpha Facing Methods //
+func syncMode() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+	listener, err := net.Listen("tcp", ":8000")
+	if err != nil {
+		log.Fatal(err)
+	}
+	// fileCounter := 0
+	fileName := "mem_table.json"
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Print(err)
+
+			continue
+		} else {
+			handleConn(conn, fileName)
+			break
+			// fileCounter++
+			// if fileCounter > 3 {
+			// 	break
+			// }
+			// switch fileCounter {
+			// case 1:
+			// 	fileName = "mem_table.json"
+			// 	break
+			// // case 2:
+			// // 	fileName = "wal_file.json"
+			// // 	break
+			// // case 3:
+			// // 	fileName = "index_table.json"
+			// // 	break
+
+			// }
+
+		}
+
+	}
+}
+
+func handleConn(c net.Conn, fileName string) {
+	input := bufio.NewScanner(c)
+	var file []byte
+	for input.Scan() {
+		log.Println(input.Text())
+		file = append(file, input.Bytes()...)
+
+		// echo(c, input.Text(), 1*time.Second)
+	}
+	if len(file) > 0 {
+		dump_generic(fileName, file)
+	}
+	c.Close()
+}
+
+func echo(c net.Conn, shout string, delay time.Duration) {
+	fmt.Fprintln(c, "\t", strings.ToUpper(shout))
+	time.Sleep(delay)
+	fmt.Fprintln(c, "\t", shout)
+	time.Sleep(delay)
+	fmt.Fprintln(c, "\t", strings.ToLower(shout))
+}
 
 // Core Methods
 func main() {
+
+	if len(os.Args) > 1 {
+		fmt.Println("SYNC MODE")
+		syncMode()
+	}
+
 	get_wal_disk()
 	get_mem_table()
 	go dump_wal("------------------------------WAL---------------------------------")

@@ -25,6 +25,13 @@ func dump_mt(s string) {
 	//fmt.Println(mt)
 }
 
+func dump_generic(fileName string, file []byte) {
+	err := ioutil.WriteFile(fileName, file, 0600)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
 func dump_wal(s string) {
 	for true {
 		time.Sleep(wal_interval * time.Millisecond)
@@ -38,6 +45,13 @@ func dump_wal(s string) {
 func dump_it(s string) {
 	file, _ := json.MarshalIndent(it, "", " ")
 	_ = ioutil.WriteFile("index_table.json", file, 0644)
+}
+
+func dump_config(s string) {
+	file, _ := json.MarshalIndent(configs_file, "", " ")
+	_ = ioutil.WriteFile("configfile.json", file, 0644)
+	fmt.Println(s)
+	//fmt.Println(mt)
 }
 
 func checkFreeMemory() int64 {
