@@ -4,5 +4,6 @@
 "number_replicas": "1",
 "max_heap_size": "40",
 "instance_name": "traira",
-"instance_port": "10000"
+"instance_port": "10000",
+"sync_port":"8000"
 }
