@@ -20,14 +20,23 @@ import (
 func get_wal_disk() {
 	configfile, err := os.Open("wal_file.json")
 	if err != nil {
+		fmt.Println("Wal file")
 		fmt.Println(err)
 		log.Fatal(err)
 	}
 	defer configfile.Close()
 	root, err := ioutil.ReadAll(configfile)
+	if err != nil {
+		fmt.Println("Wal read")
+		fmt.Println(err)
+		log.Fatal(err)
+		fmt.Println(err)
+	}
+
 	err = json.Unmarshal([]byte(root), &wal)
 
 	if err != nil {
+		fmt.Println("Wal unmarshal")
 		fmt.Println(err)
 		log.Fatal(err)
 		fmt.Println(err)

@@ -32,6 +32,7 @@ type config struct {
 	Instance_ip     string  `json:"instance_ip"`
 	Instance_name   string  `json:"instance_name"`
 	Instance_Port   string  `json:"instance_port"`
+	Sync_Port       string  `json:"sync_port"`
 	//RANGE, ALPHABETICAL, TABLE
 	Sharding_type     string                   `json:sharding_type`
 	Sharding_column   string                   `json:sharding_column`
@@ -120,8 +121,8 @@ func load_mem_table_rsocket(payload interface{}) interface{} {
 	return payload
 }
 
-func syncData() {
-	conn, err := net.Dial("tcp", "localhost:8000")
+func syncSendData(nodeName string) {
+	conn, err := net.Dial("tcp", nodeName+":"+configs_file.Sync_Port)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -164,7 +165,7 @@ func update_configuration(payload interface{}) interface{} {
 		json.Unmarshal(bytesInt, &node)
 		configs_file.Peers = append(configs_file.Peers, node)
 		//save config file to disk
-		syncData()
+		syncSendData(node.Ip)
 		dump_config("------------------------------Config File Updated---------------------------------")
 		break
 	default:
@@ -249,7 +250,7 @@ func handleRequests_rsocket(configs *config) {
 
 func syncMode() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-	listener, err := net.Listen("tcp", ":8000")
+	listener, err := net.Listen("tcp", ":"+configs_file.Sync_Port)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -311,6 +312,23 @@ func echo(c net.Conn, shout string, delay time.Duration) {
 
 // Core Methods
 func main() {
+	configfile, err := os.Open("configfile.json")
+	if err != nil {
+		fmt.Println("Here")
+		log.Fatal(err)
+	}
+	defer configfile.Close()
+	root, err := ioutil.ReadAll(configfile)
+	if err != nil {
+		fmt.Println("Here Read Config")
+		log.Fatal(err)
+	}
+
+	err = json.Unmarshal(root, &configs_file)
+	if err != nil {
+		fmt.Println("Here")
+		log.Fatal(err)
+	}
 
 	if len(os.Args) > 1 {
 		fmt.Println("SYNC MODE")
@@ -321,20 +339,14 @@ func main() {
 	get_mem_table()
 	go dump_wal("------------------------------WAL---------------------------------")
 	go dump_data("------------------------------Data---------------------------------")
-	configfile, err := os.Open("configfile.json")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer configfile.Close()
-	root, err := ioutil.ReadAll(configfile)
 
-	json.Unmarshal(root, &configs_file)
 	handleRequests_rsocket(&configs_file)
 }
 
 func get_index_table() index_table {
 	configfile, err := os.Open("index_table.json")
 	if err != nil {
+		fmt.Println("Index Table")
 		log.Fatal(err)
 	}
 	defer configfile.Close()
@@ -342,6 +354,7 @@ func get_index_table() index_table {
 	var _it index_table
 	_it.Index_rows = make([]index_row, 0)
 	if err := json.Unmarshal([]byte(string(root)), &_it); err != nil {
+		fmt.Println("Index Table Unmarshal")
 		log.Fatal(err)
 	}
 	return _it
@@ -351,6 +364,7 @@ func get_index_table() index_table {
 func get_mem_table() {
 	configfile, err := os.Open("mem_table.json")
 	if err != nil {
+		fmt.Println("Mem_table")
 		fmt.Println(err)
 		log.Fatal(err)
 	}
@@ -359,6 +373,7 @@ func get_mem_table() {
 	err = json.Unmarshal([]byte(root), &mt)
 
 	if err != nil {
+		fmt.Println("Mem_table Unmarshal")
 		fmt.Println(err)
 		log.Fatal(err)
 	}
