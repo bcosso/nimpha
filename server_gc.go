@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-const data_interval = 15000
-const wal_interval = 5000
+var data_interval time.Duration = (15000 * time.Millisecond)
+var wal_interval time.Duration = (5000 * time.Millisecond)
 
 func dump_data(s string) {
 	for true {
-		time.Sleep(data_interval * time.Millisecond)
+		time.Sleep(data_interval)
 		dump_it(s)
 		singletonTable.dump_mt(s)
 	}
@@ -36,7 +36,7 @@ func dump_generic(fileName string, file []byte) {
 
 func (sing *SingletonWal) dump_wal(s string) {
 	for true {
-		time.Sleep(wal_interval * time.Millisecond)
+		time.Sleep(wal_interval)
 		sing.mu.Lock()
 
 		file, _ := json.MarshalIndent(sing.wal, "", " ")

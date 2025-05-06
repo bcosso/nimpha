@@ -34,6 +34,8 @@ type config struct {
 	Instance_name   string  `json:"instance_name"`
 	Instance_Port   string  `json:"instance_port"`
 	Sync_Port       string  `json:"sync_port"`
+	Data_Interval   string  `json:"data_interval"`
+	Wal_Interval    string  `json:"wal_interval"`
 	//RANGE, ALPHABETICAL, TABLE
 	Sharding_type     string                   `json:sharding_type`
 	Sharding_column   string                   `json:sharding_column`
@@ -344,6 +346,18 @@ func main() {
 	if len(os.Args) > 1 {
 		fmt.Println("SYNC MODE")
 		syncMode()
+	}
+
+	if configs_file.Data_Interval != "" {
+		interval, _ := strconv.Atoi(configs_file.Data_Interval)
+		dur := time.Duration(interval)
+		data_interval = dur * time.Millisecond
+	}
+	if configs_file.Wal_Interval != "" {
+		interval, _ := strconv.Atoi(configs_file.Wal_Interval)
+		dur := time.Duration(interval)
+		fmt.Println("Chegou")
+		wal_interval = dur * time.Millisecond
 	}
 
 	get_wal_disk()
