@@ -608,16 +608,16 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 							tableWorking = append(tableWorking, table.Name)
 						}
 
-						fmt.Println("----------------------------------------------------------------------------------")
-						fmt.Println("Yes In MemTable")
-						fmt.Println("ctx:")
-						fmt.Println(*ctx)
-						fmt.Println("tableWorking:")
-						fmt.Println(tableWorking)
-						fmt.Println("ChildFilters[0].SelectClause:")
-						fmt.Println(logic_filters.ChildFilters[0].SelectClause)
+						// fmt.Println("----------------------------------------------------------------------------------")
+						// fmt.Println("Yes In MemTable")
+						// fmt.Println("ctx:")
+						// fmt.Println(*ctx)
+						// fmt.Println("tableWorking:")
+						// fmt.Println(tableWorking)
+						// fmt.Println("ChildFilters[0].SelectClause:")
+						// fmt.Println(logic_filters.ChildFilters[0].SelectClause)
 
-						fmt.Println("----------------------------------------------------------------------------------")
+						// fmt.Println("----------------------------------------------------------------------------------")
 
 						tableResult = GetTableSummarize(tableWorking, logic_filters, logic_filters.ChildFilters[0].SelectClause, aliasSubquery, indexFilter, ctx)
 					}

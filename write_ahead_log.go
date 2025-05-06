@@ -47,9 +47,6 @@ func get_wal_disk() {
 
 func read_wal_rsocket(payload interface{}) interface{} {
 
-	fmt.Println("read_wal::::::")
-	fmt.Println(payload)
-
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
 	json.Unmarshal([]byte(myString), &payload_content)
@@ -72,16 +69,12 @@ func read_wal_rsocket(payload interface{}) interface{} {
 		log.Fatal(err)
 	}
 	//wo.Rows = p
-	fmt.Println("read_wal::::::")
-	fmt.Println(p)
 
 	for _, index_row := range configs_file.Peers {
 		if index_row.Name != configs_file.Instance_name {
 			_port, _ := strconv.Atoi(index_row.Port)
 			rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
 			response, err := rsocket_json_requests.RequestJSON("/"+index_row.Name+"/update_wal_new", intermediate_inteface)
-			fmt.Println("BEFORE------------------")
-
 			if err != nil {
 				fmt.Println("err::::::")
 				fmt.Println(err)
@@ -170,7 +163,6 @@ func read_wal_strategy_rsocket(payload interface{}) interface{} {
 	//Check persistence of it (to ensure up to date Index_id everywhere in the cluster)
 	it.Index_id++
 	p.Key_id = it.Index_id
-	fmt.Println(p)
 
 	replicationPoints := GetReplicaPointsShardingStrategy(p)
 
@@ -193,8 +185,8 @@ func read_wal_strategy_rsocket(payload interface{}) interface{} {
 	jsonList, _ := json.Marshal(replicationPoints)
 	jsonStr = fmt.Sprintf(jsonStr, intermediate_inteface, string(jsonList), query, operation, guid)
 
-	fmt.Println("::::::::::::::::::::")
-	fmt.Println(jsonStr)
+	// fmt.Println("::::::::::::::::::::")
+	// fmt.Println(jsonStr)
 
 	var hadError bool = false
 	var successfulRow int

@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-const data_interval = 10000
-const wal_interval = 1000
+const data_interval = 15000
+const wal_interval = 5000
 
 func dump_data(s string) {
 	for true {
@@ -40,8 +40,12 @@ func (sing *SingletonWal) dump_wal(s string) {
 		sing.mu.Lock()
 
 		file, _ := json.MarshalIndent(sing.wal, "", " ")
-		_ = ioutil.WriteFile("wal_file.json", file, 0644)
+		err := ioutil.WriteFile("wal_file.json", file, 0644)
+		if err != nil {
+			fmt.Println(err)
+		}
 		sing.mu.Unlock()
+
 		fmt.Println(s)
 		//fmt.Println(mt)
 	}
