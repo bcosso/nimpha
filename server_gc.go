@@ -14,13 +14,15 @@ func dump_data(s string) {
 	for true {
 		time.Sleep(data_interval * time.Millisecond)
 		dump_it(s)
-		dump_mt(s)
+		singletonTable.dump_mt(s)
 	}
 }
 
-func dump_mt(s string) {
-	file, _ := json.MarshalIndent(mt, "", " ")
+func (sing *SingletonTable) dump_mt(s string) {
+	sing.mu.Lock()
+	file, _ := json.MarshalIndent(sing.mt, "", " ")
 	_ = ioutil.WriteFile("mem_table.json", file, 0644)
+	sing.mu.Unlock()
 	fmt.Println(s)
 	//fmt.Println(mt)
 }
@@ -32,11 +34,14 @@ func dump_generic(fileName string, file []byte) {
 	}
 }
 
-func dump_wal(s string) {
+func (sing *SingletonWal) dump_wal(s string) {
 	for true {
 		time.Sleep(wal_interval * time.Millisecond)
-		file, _ := json.MarshalIndent(wal, "", " ")
+		sing.mu.Lock()
+
+		file, _ := json.MarshalIndent(sing.wal, "", " ")
 		_ = ioutil.WriteFile("wal_file.json", file, 0644)
+		sing.mu.Unlock()
 		fmt.Println(s)
 		//fmt.Println(mt)
 	}
