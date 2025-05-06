@@ -159,7 +159,7 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 				if len(tablesOutOfHash) < 1 && checkIfImInPeers(peer) == false {
 					ctx := make(map[string]interface{})
 					ctx["_query_sql"] = query
-					deleteWorker(filter, &ctx)
+					singletonTable.DeleteWorker(filter, &ctx)
 					break
 				} else {
 					//Querying tables out of shard
@@ -174,7 +174,7 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 					fmt.Println("----------------------------------------------------------------------------------")
 					_analyzedFilterList := make(map[string]int)
 					ctx["_analyzedFilterList"] = _analyzedFilterList
-					deleteWorker(filter, &ctx)
+					singletonTable.DeleteWorker(filter, &ctx)
 					break
 				}
 			}

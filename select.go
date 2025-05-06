@@ -7,7 +7,6 @@ import (
 
 	//"errors"
 	"encoding/json"
-	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -38,157 +37,50 @@ type mem_table_queries struct {
 	Rows          interface{}
 }
 
-func get_slices_worker(w http.ResponseWriter, r *http.Request) {
+// func select_data_where_worker_equals_rsocket(payload interface{}) interface{} {
 
-	fromStr := r.URL.Query().Get("from")
+// 	payload_content, ok := payload.(map[string]interface{})
+// 	if !ok {
+// 		fmt.Println("ERROR!")
+// 	}
 
-	fmt.Println(" FROM: " + fromStr)
+// 	table_name := payload_content["table"].(string)
+// 	where_field := payload_content["where_field"].(string)
+// 	where_content := payload_content["where_content"].(string)
 
-	toStr := r.URL.Query().Get("to")
-	fmt.Println(" TO: " + toStr)
-	table_from := r.URL.Query().Get("table_from")
+// 	var rows_result []mem_row
+// 	for _, row := range mt.Rows {
+// 		if row.Table_name == table_name {
+// 			if row.Parsed_Document[where_field] == where_content {
+// 				rows_result = append(rows_result, row)
+// 			}
+// 		}
+// 	}
 
-	from, err := strconv.Atoi(fromStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	to, err := strconv.Atoi(toStr)
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	return rows_result
+// }
 
-	var rows_result []mem_row
-	for _, row := range mt.Rows {
-		if row.Key_id >= from && row.Key_id <= to && row.Table_name == table_from {
-			rows_result = append(rows_result, row)
-		}
-	}
+// func select_data_where_worker_contains_rsocket(payload interface{}) interface{} {
 
-	json_rows_bytes, _ := json.Marshal(rows_result)
-	fmt.Fprintf(w, string(json_rows_bytes))
-}
+// 	payload_content, ok := payload.(map[string]interface{})
+// 	if !ok {
+// 		fmt.Println("ERROR!")
+// 	}
+// 	table_name := payload_content["table"].(string)
+// 	where_field := payload_content["where_field"].(string)
+// 	where_content := payload_content["where_content"].(string)
 
-func select_data(w http.ResponseWriter, r *http.Request) {
-	//if (len(mt.rows) >
-	var rows []mem_row
-	var result []mem_row
-	table_name := r.URL.Query().Get("table")
-	where_field := r.URL.Query().Get("where_field")
-	where_content := r.URL.Query().Get("where_content")
-	where_operator := r.URL.Query().Get("where_operator")
+// 	var rows_result []mem_row
+// 	for _, row := range mt.Rows {
+// 		if row.Table_name == table_name {
+// 			if strings.Contains(row.Parsed_Document[where_field].(string), where_content) {
+// 				rows_result = append(rows_result, row)
+// 			}
+// 		}
+// 	}
 
-	for _, ir := range configs_file.Peers {
-		url := "http://" + ir.Ip + ":" + ir.Port + "/" + ir.Name + "/select_data_where_worker_" + where_operator + "?table=" + table_name + "&where_field=" + where_field + "&where_content=" + where_content
-		fmt.Println(url)
-		response, err := http.Get(url)
-		if err != nil {
-			fmt.Println(err)
-		} else {
-
-			dec := json.NewDecoder(response.Body)
-			dec.DisallowUnknownFields()
-
-			err = dec.Decode(&rows)
-			if err != nil {
-				log.Fatal(err)
-			}
-			result = append(result, rows...)
-		}
-	}
-
-	json_rows_bytes, _ := json.Marshal(result)
-	fmt.Fprintf(w, string(json_rows_bytes))
-
-}
-
-func select_data_where_worker_equals(w http.ResponseWriter, r *http.Request) {
-
-	table_name := r.URL.Query().Get("table")
-	where_field := r.URL.Query().Get("where_field")
-	where_content := r.URL.Query().Get("where_content")
-	//where_operator := r.URL.Query().Get("where_operator") // Method only for = operator. Another one will be created for contains, bigger than and smaller than
-
-	var rows_result []mem_row
-	for _, row := range mt.Rows {
-		if row.Table_name == table_name {
-			if row.Parsed_Document[where_field] == where_content {
-				rows_result = append(rows_result, row)
-			}
-		}
-		//var result_document
-		// Unmarshal or Decode the JSON to the interface.
-	}
-
-	json_rows_bytes, _ := json.Marshal(rows_result)
-	fmt.Fprintf(w, string(json_rows_bytes))
-}
-
-func select_data_where_worker_contains(w http.ResponseWriter, r *http.Request) {
-
-	table_name := r.URL.Query().Get("table")
-	where_field := r.URL.Query().Get("where_field")
-	where_content := r.URL.Query().Get("where_content")
-	//where_operator := r.URL.Query().Get("where_operator") // Method only for = operator. Another one will be created for contains, bigger than and smaller than
-
-	var rows_result []mem_row
-	for _, row := range mt.Rows {
-		if row.Table_name == table_name {
-			if strings.Contains(row.Parsed_Document[where_field].(string), where_content) {
-				rows_result = append(rows_result, row)
-			}
-		}
-		//var result_document
-		// Unmarshal or Decode the JSON to the interface.
-	}
-
-	json_rows_bytes, _ := json.Marshal(rows_result)
-	fmt.Fprintf(w, string(json_rows_bytes))
-}
-
-func select_data_where_worker_equals_rsocket(payload interface{}) interface{} {
-
-	payload_content, ok := payload.(map[string]interface{})
-	if !ok {
-		fmt.Println("ERROR!")
-	}
-
-	table_name := payload_content["table"].(string)
-	where_field := payload_content["where_field"].(string)
-	where_content := payload_content["where_content"].(string)
-
-	var rows_result []mem_row
-	for _, row := range mt.Rows {
-		if row.Table_name == table_name {
-			if row.Parsed_Document[where_field] == where_content {
-				rows_result = append(rows_result, row)
-			}
-		}
-	}
-
-	return rows_result
-}
-
-func select_data_where_worker_contains_rsocket(payload interface{}) interface{} {
-
-	payload_content, ok := payload.(map[string]interface{})
-	if !ok {
-		fmt.Println("ERROR!")
-	}
-	table_name := payload_content["table"].(string)
-	where_field := payload_content["where_field"].(string)
-	where_content := payload_content["where_content"].(string)
-
-	var rows_result []mem_row
-	for _, row := range mt.Rows {
-		if row.Table_name == table_name {
-			if strings.Contains(row.Parsed_Document[where_field].(string), where_content) {
-				rows_result = append(rows_result, row)
-			}
-		}
-	}
-
-	return rows_result
-}
+// 	return rows_result
+// }
 
 func select_data_rsocket(payload interface{}) interface{} {
 	var rows []mem_row
@@ -677,7 +569,7 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 					foundMemTable := isInQueryObject(table, ctx)
 					if !foundMemTable {
 						//Check existance in (index_ for distributed) mem_table
-						if isInMemTable(table, logic_filters.ChildFilters[0].SelectClause, ctx) == false {
+						if singletonTable.IsInMemTable(table, logic_filters.ChildFilters[0].SelectClause, ctx) == false {
 							fmt.Println("----------------------------------------------------------------------------------")
 							fmt.Println("Not In MemTable")
 							fmt.Println(tables)
@@ -890,7 +782,7 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx *map[string]in
 		// 	return
 		// }
 		//need to check the safety of doing this in parallel
-		if !isInMemTable(table, filter.ChildFilters[0].SelectClause, ctx) {
+		if !singletonTable.IsInMemTable(table, filter.ChildFilters[0].SelectClause, ctx) {
 
 			for _, ir := range configs_file.Peers {
 				if configs_file.Instance_name != ir.Name {
@@ -948,37 +840,11 @@ func select_table(payload interface{}) interface{} {
 
 	table_name := payload_content["table"].(string)
 	alias := payload_content["alias"].(string)
-	// filter := payload_content["filter"].(Filter)
-	// fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	// fmt.Println("CHECKING FILTER")
-	// fmt.Println(filter)
-	// fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	// lookForFinalFiltersInFilters2
 
 	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	fmt.Println("Result for distributed Query in Node")
 	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	var rows_result []mem_table_queries
-	for _, row := range mt.Rows {
-		if row.Table_name == table_name {
-
-			//Need to apply some logic to filter unecessary data
-			// side, clause := CheckWhichSideContainsColumn(leftValue, rightValue)
-			// if side == 1 || side == 2{}
-			// for f, _ range filter
-			// if GetFilterAndFilter2(){}
-
-			if alias != "" {
-				table_name = alias
-			}
-			rowMemQuery := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
-			rows_result = append(rows_result, rowMemQuery)
-		}
-	}
-	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	fmt.Println("Result for distributed Query in Node")
-	fmt.Println(rows_result)
-	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	rows_result := singletonTable.SelectTable(table_name, alias)
 
 	return rows_result
 }
@@ -1024,27 +890,27 @@ func isTableInQueryObject(tableName string, ctx *map[string]interface{}) bool {
 	return found
 }
 
-func isInMemTable(tableObject SqlClause, selectObject []SqlClause, ctx *map[string]interface{}) bool {
-	result := false
-	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
-	// var clauseValidation sqlparserproject.CommandTree
+// func isInMemTable(tableObject SqlClause, selectObject []SqlClause, ctx *map[string]interface{}) bool {
+// 	result := false
+// 	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
+// 	// var clauseValidation sqlparserproject.CommandTree
 
-	for _, row := range mt.Rows {
-		if (row.Table_name == tableObject.Name) || (row.Table_name == tableObject.Alias) {
-			name := ""
-			if (row.Table_name == tableObject.Name) && (tableObject.Alias == "") {
-				name = tableObject.Name
-			} else {
-				name = tableObject.Alias
-			}
-			newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
-			_query[name] = append(_query[name], newRow)
-			result = true
-		}
-	}
+// 	for _, row := range mt.Rows {
+// 		if (row.Table_name == tableObject.Name) || (row.Table_name == tableObject.Alias) {
+// 			name := ""
+// 			if (row.Table_name == tableObject.Name) && (tableObject.Alias == "") {
+// 				name = tableObject.Name
+// 			} else {
+// 				name = tableObject.Alias
+// 			}
+// 			newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
+// 			_query[name] = append(_query[name], newRow)
+// 			result = true
+// 		}
+// 	}
 
-	return result
-}
+// 	return result
+// }
 
 func GetValueFromFilter(contentMemRow interface{}, referenceType interface{}) interface{} {
 	str := ""
@@ -1415,4 +1281,54 @@ func GetClauseFromValue(interfaceValue interface{}) sqlparserproject.CommandTree
 	}
 	return clause
 
+}
+
+// /////////////////////////////////////Mutex///////////////////////////////////////////////////////////
+func (sing *SingletonTable) SelectTable(table_name string, alias string) []mem_table_queries {
+	sing.mu.RLock()
+	defer sing.mu.RUnlock()
+	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("Result for distributed Query in Node")
+	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	var rows_result []mem_table_queries
+	for _, row := range sing.mt.Rows {
+		if row.Table_name == table_name {
+
+			if alias != "" {
+				table_name = alias
+			}
+			rowMemQuery := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
+			rows_result = append(rows_result, rowMemQuery)
+		}
+	}
+	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("Result for distributed Query in Node")
+	fmt.Println(rows_result)
+	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
+	return rows_result
+}
+
+func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []SqlClause, ctx *map[string]interface{}) bool {
+	result := false
+	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
+	// var clauseValidation sqlparserproject.CommandTree
+	sing.mu.RLock()
+	defer sing.mu.RUnlock()
+
+	for _, row := range sing.mt.Rows {
+		if (row.Table_name == tableObject.Name) || (row.Table_name == tableObject.Alias) {
+			name := ""
+			if (row.Table_name == tableObject.Name) && (tableObject.Alias == "") {
+				name = tableObject.Name
+			} else {
+				name = tableObject.Alias
+			}
+			newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
+			_query[name] = append(_query[name], newRow)
+			result = true
+		}
+	}
+
+	return result
 }

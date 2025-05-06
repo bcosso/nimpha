@@ -33,14 +33,16 @@ func get_wal_disk() {
 		fmt.Println(err)
 	}
 
-	err = json.Unmarshal([]byte(root), &wal)
+	// err = json.Unmarshal([]byte(root), &wal)
 
-	if err != nil {
-		fmt.Println("Wal unmarshal")
-		fmt.Println(err)
-		log.Fatal(err)
-		fmt.Println(err)
-	}
+	// if err != nil {
+	// 	fmt.Println("Wal unmarshal")
+	// 	fmt.Println(err)
+	// 	log.Fatal(err)
+	// 	fmt.Println(err)
+	// }
+
+	singleton.UnmarshalWAL([]byte(root))
 }
 
 func read_wal_rsocket(payload interface{}) interface{} {
@@ -83,17 +85,13 @@ func read_wal_rsocket(payload interface{}) interface{} {
 			if err != nil {
 				fmt.Println("err::::::")
 				fmt.Println(err)
-				fmt.Println(wal)
 			}
 			fmt.Println(response)
 		}
 	}
 
 	uuidStr := uuid.New()
-	wal[uuidStr.String()] = wo
-
-	fmt.Println("WAL::::::")
-	fmt.Println(wal)
+	singleton.SetOperationWAL(uuidStr.String(), wo)
 
 	var param interface{}
 	param = map[string]interface{}{
@@ -254,12 +252,10 @@ func read_wal_strategy_rsocket(payload interface{}) interface{} {
 			fmt.Println(err)
 		}
 	} else {
-		wo := wal[guid]
-		wo.Status = true
-		wal[guid] = wo
+		singleton.SetStatus(guid, true)
 
 	}
-	UpdateWalWholeCluster(guid, wal[guid])
+	UpdateWalWholeCluster(guid, singleton.Get(guid))
 
 	return "Ok"
 }
@@ -351,7 +347,8 @@ func UpdateWal(payload interface{}) interface{} {
 		instanceToUpdate := ActiveInstances{InstanceName: instance.Name}
 		wo.InstancesToUpdate = append(wo.InstancesToUpdate, instanceToUpdate)
 	}
-	wal[guid] = wo
+	// wal[guid] = wo
+	singleton.SetOperationWAL(guid, wo)
 	jsonParam, _ := json.Marshal(param)
 
 	//Check if this instance should be updated
@@ -384,73 +381,73 @@ func TriggerRecoverDataInNodes(payload interface{}) interface{} {
 	return "Ok"
 }
 
-func TryRecoverData() (bool, []error) {
+// func TryRecoverData() (bool, []error) {
 
-	//try only once per recovery attempt
-	var errList []error
-	previousNode := make(map[string]bool)
-	var successes int = 0
-	var cases int = 0
+// 	//try only once per recovery attempt
+// 	var errList []error
+// 	previousNode := make(map[string]bool)
+// 	var successes int = 0
+// 	var cases int = 0
 
-	for indexWo, wo := range wal {
-		if wo.Status != true {
+// 	for indexWo, wo := range wal {
+// 		if wo.Status != true {
 
-			//Level of Consistency choice : Eventual or full (WHEN SHARDING and/or REPLICATING) If a node is down, it will demand recovery, using the accumulated write ahead log
-			// var wg sync.WaitGroup
-			row := wo.Rows[0]
-			replicationPoints := GetReplicaPointsShardingStrategy(row)
+// 			//Level of Consistency choice : Eventual or full (WHEN SHARDING and/or REPLICATING) If a node is down, it will demand recovery, using the accumulated write ahead log
+// 			// var wg sync.WaitGroup
+// 			row := wo.Rows[0]
+// 			replicationPoints := GetReplicaPointsShardingStrategy(row)
 
-			for indexNode, node := range wo.InstancesToUpdate {
-				if node.Status != true {
-					val, found := previousNode[node.InstanceName]
+// 			for indexNode, node := range wo.InstancesToUpdate {
+// 				if node.Status != true {
+// 					val, found := previousNode[node.InstanceName]
 
-					cases++
+// 					cases++
 
-					if !found || (found && val) { //Re-evaluate the utility for this condition - bcosso
-						previousNode[node.InstanceName] = true
+// 					if !found || (found && val) { //Re-evaluate the utility for this condition - bcosso
+// 						previousNode[node.InstanceName] = true
 
-						index_row := GetPeerByInstanceName(node.InstanceName)
-						_port, _ := strconv.Atoi(index_row.Port)
-						rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
-						var param interface{}
-						param = map[string]interface{}{
-							"key_id":         strconv.Itoa(row.Key_id),
-							"table":          row.Table_name,
-							"body":           row,
-							"query_sql":      wo.Query,
-							"operation_type": wo.Operation_type,
-							"instance_list":  replicationPoints,
-							"guid":           indexWo,
-						}
-						// param2 := make(map[string]interface{})
-						// param2[indexWo] = param
-						_, err := rsocket_json_requests.RequestJSON("/"+index_row.Name+"/update_wal_new", param)
-						if err != nil {
-							fmt.Println("err::::::")
-							fmt.Println(err)
-							errList = append(errList, err)
-						} else {
-							wal[indexWo].InstancesToUpdate[indexNode].Status = true
-							successes++
-						}
-					}
-				}
-			}
-			if len(errList) < 1 {
-				key := wal[indexWo]
-				key.Status = true
-				wal[indexWo] = key
-			}
-			UpdateWalWholeCluster(indexWo, wal[indexWo])
-		}
-	}
-	return (successes == cases), errList
-}
+// 						index_row := GetPeerByInstanceName(node.InstanceName)
+// 						_port, _ := strconv.Atoi(index_row.Port)
+// 						rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
+// 						var param interface{}
+// 						param = map[string]interface{}{
+// 							"key_id":         strconv.Itoa(row.Key_id),
+// 							"table":          row.Table_name,
+// 							"body":           row,
+// 							"query_sql":      wo.Query,
+// 							"operation_type": wo.Operation_type,
+// 							"instance_list":  replicationPoints,
+// 							"guid":           indexWo,
+// 						}
+// 						// param2 := make(map[string]interface{})
+// 						// param2[indexWo] = param
+// 						_, err := rsocket_json_requests.RequestJSON("/"+index_row.Name+"/update_wal_new", param)
+// 						if err != nil {
+// 							fmt.Println("err::::::")
+// 							fmt.Println(err)
+// 							errList = append(errList, err)
+// 						} else {
+// 							wal[indexWo].InstancesToUpdate[indexNode].Status = true
+// 							successes++
+// 						}
+// 					}
+// 				}
+// 			}
+// 			if len(errList) < 1 {
+// 				key := wal[indexWo]
+// 				key.Status = true
+// 				wal[indexWo] = key
+// 			}
+// 			UpdateWalWholeCluster(indexWo, wal[indexWo])
+// 		}
+// 	}
+// 	return (successes == cases), errList
+// }
 
 func ScheduleRecoverData(dataInRecovery *bool) {
 	for true {
 		time.Sleep(data_interval * time.Millisecond)
-		success, _ := TryRecoverData()
+		success, _ := singleton.TryRecoverData()
 		if success {
 			*dataInRecovery = false
 			break
@@ -477,23 +474,25 @@ func UpdateSuccessfulNodesWal(payload interface{}) interface{} {
 		fmt.Println(err)
 	}
 	guid := guidInterface.(string)
-	count := 0
-	for countNode, node := range wal[guid].InstancesToUpdate {
+	// count := 0
+	// for countNode, node := range wal[guid].InstancesToUpdate {
 
-		for _, nodeSuccess := range nodesSuccessful {
-			if node.InstanceName == nodeSuccess.Name {
-				wal[guid].InstancesToUpdate[countNode].Status = true
-			}
-		}
-		if node.Status == true {
-			count++
-		}
-	}
-	if len(wal[guid].InstancesToUpdate) == count {
-		wo, _ := wal[guid]
-		wo.Status = true
-		wal[guid] = wo
-	}
+	// 	for _, nodeSuccess := range nodesSuccessful {
+	// 		if node.InstanceName == nodeSuccess.Name {
+	// 			wal[guid].InstancesToUpdate[countNode].Status = true
+	// 		}
+	// 	}
+	// 	if node.Status == true {
+	// 		count++
+	// 	}
+	// }
+	// if len(wal[guid].InstancesToUpdate) == count {
+	// 	wo, _ := wal[guid]
+	// 	wo.Status = true
+	// 	wal[guid] = wo
+	// }
+
+	singleton.AddItemWAL(guid, nodesSuccessful)
 
 	// UpdateWalWholeCluster(guid, wal[guid])
 	return "Ok"
@@ -533,7 +532,8 @@ func UpdateWalOnly(payload interface{}) interface{} {
 	var walOperation wal_operation
 	bytesInt, _ := json.Marshal(walOperationInterface)
 	json.Unmarshal(bytesInt, &walOperation)
-	wal[guid] = walOperation
+	// wal[guid] = walOperation
+	singleton.SetOperationWAL(guid, walOperation)
 
 	return ""
 

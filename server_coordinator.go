@@ -18,6 +18,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bcosso/rsocket_json_requests"
 	"github.com/bcosso/sqlparserproject"
@@ -109,8 +110,20 @@ type ActiveInstances struct {
 	Status       bool   `json:"status"`
 }
 
-var it index_table = get_index_table()
+type SingletonWal struct {
+	wal map[string]wal_operation
+	mu  sync.RWMutex
+}
+
+type SingletonTable struct {
+	mt mem_table
+	mu sync.RWMutex
+}
+
 var mt mem_table
+
+var it index_table = get_index_table()
+
 var wal map[string]wal_operation
 var configs_file config
 
@@ -202,11 +215,7 @@ func handleRequests(configs *config) {
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/get_all", get_all)
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/get_rows", get_rows)
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/get_range", get_range)
-	myRouter.HandleFunc("/"+configs.Instance_name+"/get_slices_worker", get_slices_worker)
 	myRouter.HandleFunc("/"+configs.Instance_name+"/update_index_manager", update_index_manager)
-	myRouter.HandleFunc("/"+configs.Instance_name+"/select_data", select_data)
-	myRouter.HandleFunc("/"+configs.Instance_name+"/select_data_where_worker_equals", select_data_where_worker_equals)
-	myRouter.HandleFunc("/"+configs.Instance_name+"/select_data_where_worker_contains", select_data_where_worker_contains)
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/delete_data_where", delete_data_where)
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/delete_data_where_worker_contains", delete_data_where_worker_contains)
 
@@ -223,10 +232,12 @@ func handleRequests_rsocket(configs *config) {
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_worker", insertWorker)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_worker_rsocket", insert_worker_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data", select_data_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_equals", select_data_where_worker_equals_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_contains", select_data_where_worker_contains_rsocket)
+
+	// Temporarely commented
+	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_equals", select_data_where_worker_equals_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_contains", select_data_where_worker_contains_rsocket)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/delete_data_where", delete_data_where_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
+	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_table", select_table)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_query", execute_query)
 
@@ -337,7 +348,7 @@ func main() {
 
 	get_wal_disk()
 	get_mem_table()
-	go dump_wal("------------------------------WAL---------------------------------")
+	go singleton.dump_wal("------------------------------WAL---------------------------------")
 	go dump_data("------------------------------Data---------------------------------")
 
 	handleRequests_rsocket(&configs_file)
@@ -370,29 +381,8 @@ func get_mem_table() {
 	}
 	defer configfile.Close()
 	root, err := ioutil.ReadAll(configfile)
-	err = json.Unmarshal([]byte(root), &mt)
+	singletonTable.UnmarshalMT([]byte(root))
 
-	if err != nil {
-		fmt.Println("Mem_table Unmarshal")
-		fmt.Println(err)
-		log.Fatal(err)
-	}
-	// current_index_row := 0
-	// for _, row := range mt.Rows {
-	// 	current_document := row.Document
-	// 	//fmt.Println(current_document)
-	// 	parsed_document, ok :=  current_document.(map[string] interface{})
-	// 	//err = json.Unmarshal(current_document, &parsed_document)
-
-	// 	if !ok{
-	// 		fmt.Println("ERROR!")
-
-	// 	}
-	// 	row.Parsed_Document = parsed_document
-	// 	//fmt.Println(row.Parsed_Document["name_client"])
-	// 	mt.Rows[current_index_row].Parsed_Document = parsed_document
-	// 	current_index_row ++
-	// }
 }
 
 func check_index_manager()     {}
@@ -718,4 +708,142 @@ func ConvertTypes(object interface{}, name string) interface{} {
 		panic(err1)
 	}
 	return newValue
+}
+
+// ///////////////////////////////////////////////////////////////////////Mutex//////////////////////////////////////////////////////////////////
+var singleton SingletonWal
+var singletonTable SingletonTable
+
+func (sing *SingletonWal) UnmarshalWAL(fileData []byte) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	err := json.Unmarshal(fileData, &(sing.wal))
+
+	if err != nil {
+		fmt.Println("Mutex Wal unmarshal")
+		fmt.Println(err)
+		log.Fatal(err)
+		fmt.Println(err)
+	}
+}
+
+func (sing *SingletonTable) UnmarshalMT(fileData []byte) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	err := json.Unmarshal(fileData, &(sing.mt))
+
+	if err != nil {
+		fmt.Println("Mutex MT unmarshal")
+		fmt.Println(err)
+		log.Fatal(err)
+		fmt.Println(err)
+	}
+}
+
+func (sing *SingletonWal) AddItemWAL(guid string, nodesSuccessful []peers) {
+	count := 0
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	for countNode, node := range sing.wal[guid].InstancesToUpdate {
+
+		for _, nodeSuccess := range nodesSuccessful {
+			if node.InstanceName == nodeSuccess.Name {
+				sing.wal[guid].InstancesToUpdate[countNode].Status = true
+			}
+		}
+		if node.Status == true {
+			count++
+		}
+	}
+	if len(sing.wal[guid].InstancesToUpdate) == count {
+		wo, _ := sing.wal[guid]
+		wo.Status = true
+		sing.wal[guid] = wo
+	}
+}
+
+func (sing *SingletonWal) SetOperationWAL(guid string, wo wal_operation) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	sing.wal[guid] = wo
+}
+
+func (sing *SingletonWal) TryRecoverData() (bool, []error) {
+
+	//try only once per recovery attempt
+	var errList []error
+	previousNode := make(map[string]bool)
+	var successes int = 0
+	var cases int = 0
+
+	sing.mu.Lock()
+
+	for indexWo, wo := range sing.wal {
+		if wo.Status != true {
+
+			//Level of Consistency choice : Eventual or full (WHEN SHARDING and/or REPLICATING) If a node is down, it will demand recovery, using the accumulated write ahead log
+			// var wg sync.WaitGroup
+			row := wo.Rows[0]
+			replicationPoints := GetReplicaPointsShardingStrategy(row)
+
+			for indexNode, node := range wo.InstancesToUpdate {
+				if node.Status != true {
+					val, found := previousNode[node.InstanceName]
+
+					cases++
+
+					if !found || (found && val) { //Re-evaluate the utility for this condition - bcosso
+						previousNode[node.InstanceName] = true
+
+						index_row := GetPeerByInstanceName(node.InstanceName)
+						_port, _ := strconv.Atoi(index_row.Port)
+						rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
+						var param interface{}
+						param = map[string]interface{}{
+							"key_id":         strconv.Itoa(row.Key_id),
+							"table":          row.Table_name,
+							"body":           row,
+							"query_sql":      wo.Query,
+							"operation_type": wo.Operation_type,
+							"instance_list":  replicationPoints,
+							"guid":           indexWo,
+						}
+						// param2 := make(map[string]interface{})
+						// param2[indexWo] = param
+						_, err := rsocket_json_requests.RequestJSON("/"+index_row.Name+"/update_wal_new", param)
+						if err != nil {
+							fmt.Println("err::::::")
+							fmt.Println(err)
+							errList = append(errList, err)
+						} else {
+							sing.wal[indexWo].InstancesToUpdate[indexNode].Status = true
+							successes++
+						}
+					}
+				}
+			}
+			if len(errList) < 1 {
+				key := sing.wal[indexWo]
+				key.Status = true
+				sing.wal[indexWo] = key
+			}
+			UpdateWalWholeCluster(indexWo, sing.wal[indexWo])
+		}
+	}
+	sing.mu.Unlock()
+	return (successes == cases), errList
+}
+
+func (sing *SingletonWal) SetStatus(guid string, status bool) {
+	sing.mu.Lock()
+	wo := sing.wal[guid]
+	wo.Status = status
+	sing.wal[guid] = wo
+	sing.mu.Unlock()
+}
+
+func (sing *SingletonWal) Get(guid string) wal_operation {
+	sing.mu.RLock()
+	defer sing.mu.RUnlock()
+	return sing.wal[guid]
 }
