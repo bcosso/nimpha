@@ -52,8 +52,8 @@ func execute_query(payload interface{}) interface{} {
 	}
 
 	query := payload_content["query"].(string)
-	var action sqlparserproject.ActionExec = ParsingActionExec{}
-	sqlparserproject.SetAction(action)
+	// var action sqlparserproject.ActionExec = ParsingActionExec{}
+	// sqlparserproject.SetAction(action)
 	tree := sqlparserproject.ExecuteParsingProcess(query)
 	// filterNew := new(Filter)
 	filterNew2 := new(Filter)
@@ -78,8 +78,8 @@ func execute_query(payload interface{}) interface{} {
 }
 
 func execute_query_delete(query string) interface{} {
-	var action sqlparserproject.ActionExec = ParsingActionExec{}
-	sqlparserproject.SetAction(action)
+	// var action sqlparserproject.ActionExec = ParsingActionExec{}
+	// sqlparserproject.SetAction(action)
 	tree := sqlparserproject.ExecuteParsingProcess(query)
 	filterNew := new(Filter)
 	// result := determineQueryType(tree, filterNew2, query)
@@ -433,28 +433,28 @@ func setValuesToBeInsertedToFilter(tree sqlparserproject.CommandTree, filter *Fi
 	}
 }
 
-func (internalExec ParsingActionExec) ExecActionFinal(tree sqlparserproject.CommandTree) {
-	fmt.Println("-----------------------------------------------------------")
-	fmt.Println("CorrespondingFinalActionParsing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-	fmt.Println("-----------------------------------------------------------")
-	fmt.Println(tree)
+// func (internalExec ParsingActionExec) ExecActionFinal(tree sqlparserproject.CommandTree) {
+// 	fmt.Println("-----------------------------------------------------------")
+// 	fmt.Println("CorrespondingFinalActionParsing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+// 	fmt.Println("-----------------------------------------------------------")
+// 	fmt.Println(tree)
 
-	// filterNew := new(Filter)
-	// read_through(tree, "", filterNew)
+// 	// filterNew := new(Filter)
+// 	// read_through(tree, "", filterNew)
 
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println("Filter!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println(filterNew)
+// 	// fmt.Println("-----------------------------------------------------------")
+// 	// fmt.Println("Filter!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+// 	// fmt.Println("-----------------------------------------------------------")
+// 	// fmt.Println(filterNew)
 
-	// result := select_data_where_worker_contains_rsocket_sql(*filterNew)
+// 	// result := select_data_where_worker_contains_rsocket_sql(*filterNew)
 
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println("QUERY RESULT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println(result)
+// 	// fmt.Println("-----------------------------------------------------------")
+// 	// fmt.Println("QUERY RESULT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+// 	// fmt.Println("-----------------------------------------------------------")
+// 	// fmt.Println(result)
 
-}
+// }
 
 func return_type(nameType string) reflect.Type {
 	if nameType == "string" {
@@ -699,16 +699,16 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 
 // func eval_select_command()
 
-func (internalExec ParsingActionExec) ExecAction(tree *sqlparserproject.CommandTree) {
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println("CorrespondingActionParsing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println(tree)
-}
+// func (internalExec ParsingActionExec) ExecAction(tree *sqlparserproject.CommandTree) {
+// 	// fmt.Println("-----------------------------------------------------------")
+// 	// fmt.Println("CorrespondingActionParsing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+// 	// fmt.Println("-----------------------------------------------------------")
+// 	// fmt.Println(tree)
+// }
 
-type ParsingActionExec struct {
-	sqlparserproject.ActionExec
-}
+// type ParsingActionExec struct {
+// 	sqlparserproject.ActionExec
+// }
 
 func IsInteger(val float64) bool {
 	return val == float64(int(val))
