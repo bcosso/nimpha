@@ -7,20 +7,23 @@ import (
 	"time"
 )
 
-const data_interval = 10000
-const wal_interval = 1000
+var data_interval time.Duration = (15000 * time.Millisecond)
+var wal_interval time.Duration = (5000 * time.Millisecond)
+var wal_limit int = 0
 
 func dump_data(s string) {
 	for true {
-		time.Sleep(data_interval * time.Millisecond)
+		time.Sleep(data_interval)
 		dump_it(s)
-		dump_mt(s)
+		singletonTable.dump_mt(s)
 	}
 }
 
-func dump_mt(s string) {
-	file, _ := json.MarshalIndent(mt, "", " ")
+func (sing *SingletonTable) dump_mt(s string) {
+	sing.mu.Lock()
+	file, _ := json.MarshalIndent(sing.mt, "", " ")
 	_ = ioutil.WriteFile("mem_table.json", file, 0644)
+	sing.mu.Unlock()
 	fmt.Println(s)
 	//fmt.Println(mt)
 }
@@ -32,11 +35,24 @@ func dump_generic(fileName string, file []byte) {
 	}
 }
 
-func dump_wal(s string) {
+func (sing *SingletonWal) dump_wal(s string) {
 	for true {
-		time.Sleep(wal_interval * time.Millisecond)
-		file, _ := json.MarshalIndent(wal, "", " ")
-		_ = ioutil.WriteFile("wal_file.json", file, 0644)
+		time.Sleep(wal_interval)
+		sing.mu.Lock()
+		fileName := "wal_file.json"
+		file, _ := json.MarshalIndent(sing.wal, "", " ")
+		if wal_limit > 0 && len(file) >= wal_limit {
+			fileName = "wal_file%s.json"
+			fileName = fmt.Sprintf(fileName, time.Now().Format("20060102150405"))
+			sing.wal = make(map[string]wal_operation)
+		}
+
+		err := ioutil.WriteFile(fileName, file, 0644)
+		if err != nil {
+			fmt.Println(err)
+		}
+		sing.mu.Unlock()
+
 		fmt.Println(s)
 		//fmt.Println(mt)
 	}

@@ -94,8 +94,14 @@ func insertDataJsonBody(payload interface{}) interface{} {
 func insertWorker(payload interface{}) interface{} {
 
 	p, _ := GetParsedDocumentToMemRow(payload)
+	singletonTable.InsertWorker(p)
+	return "Success"
+}
 
-	mt.Rows = append(mt.Rows, p)
+func (sing *SingletonTable) InsertWorker(p mem_row) string {
 
+	sing.mu.Lock()
+	sing.mt.Rows = append(sing.mt.Rows, p)
+	sing.mu.Unlock()
 	return "Success"
 }
