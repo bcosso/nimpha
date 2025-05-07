@@ -36,6 +36,7 @@ type config struct {
 	Sync_Port       string  `json:"sync_port"`
 	Data_Interval   string  `json:"data_interval"`
 	Wal_Interval    string  `json:"wal_interval"`
+	Wal_Limit       string  `json:"wal_limit"`
 	//RANGE, ALPHABETICAL, TABLE
 	Sharding_type     string                   `json:sharding_type`
 	Sharding_column   string                   `json:sharding_column`
@@ -122,14 +123,8 @@ type SingletonTable struct {
 	mu sync.RWMutex
 }
 
-var mt mem_table
-
 var it index_table = get_index_table()
-
-var wal map[string]wal_operation
 var configs_file config
-
-//Client Facing Methods //
 
 func load_mem_table_rsocket(payload interface{}) interface{} {
 	get_mem_table()
@@ -327,7 +322,7 @@ func echo(c net.Conn, shout string, delay time.Duration) {
 func main() {
 	configfile, err := os.Open("configfile.json")
 	if err != nil {
-		fmt.Println("Here")
+		fmt.Println("Error on config file found or config file not existent")
 		log.Fatal(err)
 	}
 	defer configfile.Close()
@@ -339,7 +334,7 @@ func main() {
 
 	err = json.Unmarshal(root, &configs_file)
 	if err != nil {
-		fmt.Println("Here")
+		fmt.Println("unmarshal of config file failed")
 		log.Fatal(err)
 	}
 
@@ -347,7 +342,10 @@ func main() {
 		fmt.Println("SYNC MODE")
 		syncMode()
 	}
-
+	if configs_file.Wal_Limit != "" {
+		wal_limit, _ = strconv.Atoi(configs_file.Wal_Limit)
+		wal_limit = wal_limit * 1024 * 1024
+	}
 	if configs_file.Data_Interval != "" {
 		interval, _ := strconv.Atoi(configs_file.Data_Interval)
 		dur := time.Duration(interval)
@@ -356,7 +354,6 @@ func main() {
 	if configs_file.Wal_Interval != "" {
 		interval, _ := strconv.Atoi(configs_file.Wal_Interval)
 		dur := time.Duration(interval)
-		fmt.Println("Chegou")
 		wal_interval = dur * time.Millisecond
 	}
 
