@@ -47,7 +47,7 @@ TODO Parser:
  - DELETE
  - UPDATE
  - ~~select with subqueries~~
- - Select without where clause
+ - Select without where clause: Currently to get all rows we need a where clause containing an always true condition (i.e. where 1 = 1)  
  - Mathematical operations
  - ~~Case When~~
  - Nested Case When
