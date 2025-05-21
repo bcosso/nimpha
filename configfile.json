@@ -1,9 +1,9 @@
 {
-"path": "C:\\Bruno\\TestFolder\\",
-"peers": [{"name": "traira", "ip": "127.0.0.1", "port":"10000"}, {"name": "veiobicha", "ip": "127.0.0.1", "port":"10001"}], 
+"path": "C:\\TestFolder\\",
+"peers": [{"name": "instance01", "ip": "127.0.0.1", "port":"10000"}, {"name": "instance02", "ip": "127.0.0.1", "port":"10001"}], 
 "number_replicas": "1",
 "max_heap_size": "40",
-"instance_name": "traira",
+"instance_name": "instance01",
 "instance_port": "10000",
 "sync_port":"8000"
 }
