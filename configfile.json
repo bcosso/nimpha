@@ -1,6 +1,6 @@
 {
 "path": "C:\\TestFolder\\",
-"peers": [{"name": "instance01", "ip": "127.0.0.1", "port":"10000"}, {"name": "instance02", "ip": "127.0.0.1", "port":"10001"}], 
+"peers": [{"name": "instance01", "ip": "127.0.0.1", "port":"10000"}], 
 "number_replicas": "1",
 "max_heap_size": "40",
 "instance_name": "instance01",
