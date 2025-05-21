@@ -14,7 +14,7 @@ docker run -it -p 10001:10000 -p 8001:8000 -p 9091:9090 imagename
 ```
 For testing the docker image a post request to the localhost port 9091 with a query can be executed:
 ```
-POST http://127.0.0.1:9090/execute_query_method HTTP/1.1
+POST http://127.0.0.1:9091/execute_query_method HTTP/1.1
 content-type: application/json
 
 {
