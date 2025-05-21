@@ -6,6 +6,24 @@ Pet In-Memory database. Ideally it will be:
 
 ![alt text](Nimpha_Model.png)
 
+Standalone docker image for development
+[dockerfile](https://github.com/bcosso/nimpha/blob/main/dockerfile)
+```
+docker build -t imagename -f dockerfile .
+docker run -it -p 10001:10000 -p 8001:8000 -p 9091:9090 imagename
+```
+For testing the docker image a post request to the localhost port 9091 with a query can be executed:
+```
+POST http://127.0.0.1:9090/execute_query_method HTTP/1.1
+content-type: application/json
+
+{
+    "method": "execute_query",
+    "query": "select * from table2 where 1 = 1"
+}
+```
+
+
 
 TODO:
  - Update
