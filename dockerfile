@@ -13,10 +13,12 @@ RUN cargo build --release
 # Clone and build nimpha
 WORKDIR /app
 RUN git clone https://github.com/bcosso/nimpha nimpha
-WORKDIR /app/nimpha
+WORKDIR /app/nimpha/src
 RUN go mod init nimpha
 RUN go mod tidy
 RUN go build
+RUN cp /app/nimpha/src/nimpha /app/nimpha/nimpha
+WORKDIR /app/nimpha/
 RUN echo "{}" > wal_file.json
 
 # Clone and build the np command line
