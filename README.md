@@ -19,7 +19,7 @@ content-type: application/json
 
 {
     "method": "execute_query",
-    "query": "select * from table2 where 1 = 1"
+    "query": "select * from table2"
 }
 ```
 
