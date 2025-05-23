@@ -123,11 +123,11 @@ type SingletonTable struct {
 	mu sync.RWMutex
 }
 
-var it index_table = get_index_table()
+var it index_table = getIndexTable()
 var configs_file config
 
-func load_mem_table_rsocket(payload interface{}) interface{} {
-	get_mem_table()
+func loadMemTableRsocket(payload interface{}) interface{} {
+	getMemTable()
 	return payload
 }
 
@@ -152,7 +152,7 @@ func syncSendData(nodeName string) {
 }
 
 // Updates cluster configuration on the fly
-func update_configuration(payload interface{}) interface{} {
+func updateConfiguration(payload interface{}) interface{} {
 	operationInterface, err := GetAttributeFromPayload("operation", payload)
 	if err != nil {
 		fmt.Println("*******************")
@@ -176,7 +176,7 @@ func update_configuration(payload interface{}) interface{} {
 		configs_file.Peers = append(configs_file.Peers, node)
 		//save config file to disk
 		syncSendData(node.Ip)
-		dump_config("------------------------------Config File Updated---------------------------------")
+		dumpConfig("------------------------------Config File Updated---------------------------------")
 		break
 	default:
 		break
@@ -185,66 +185,44 @@ func update_configuration(payload interface{}) interface{} {
 	return payload
 }
 
-func update_index_table(w http.ResponseWriter, r *http.Request) {
-
-	//key_id := r.URL.Query().Get("key_id")
-	//ikey_id, err := strconv.Atoi(key_id)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	//var row index_row
-	//result.Current_index = ikey_id
-	//result.Document = r.URL.Query().Get("document")
-	//result.Table_name = r.URL.Query().Get("table_from")
-	//mt.Rows = append(mt.Rows, result)
-
-	//fmt.Println(mt)
-	//Check if IndexRow is full. Then create another and append.Otherwise, just append to the mem_table and ++ the counter.
-	//The next One should be rotational list of available servers
-	//create keep alive
-
-	//fmt.Fprintf(w, "Success")
-}
-
 func handleRequests(configs *config) {
 
 	myRouter := mux.NewRouter().StrictSlash(true)
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/get_all", get_all)
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/get_rows", get_rows)
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/get_range", get_range)
-	myRouter.HandleFunc("/"+configs.Instance_name+"/update_index_manager", update_index_manager)
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/delete_data_where", delete_data_where)
 	// myRouter.HandleFunc("/"+configs.Instance_name+"/delete_data_where_worker_contains", delete_data_where_worker_contains)
 
 	log.Fatal(http.ListenAndServe(":"+configs.Instance_Port, myRouter))
 }
 
-func handleRequests_rsocket(configs *config) {
+func handleRequestsRsocket(configs *config) {
 
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/load_mem_table", load_mem_table_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/read_wal", read_wal_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_configuration", update_configuration)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/load_mem_table", loadMemTableRsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/read_wal", readWalRsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_configuration", updateConfiguration)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal", update_wal_rsocket)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert", insert_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_worker", insertWorker)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_worker_rsocket", insert_worker_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data", select_data_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data", selectDataRsocket)
 
 	// Temporarely commented
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_equals", select_data_where_worker_equals_rsocket)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_contains", select_data_where_worker_contains_rsocket)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/delete_data_where", delete_data_where_rsocket)
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_table", select_table)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_query", execute_query)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_table", selectTable)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_query", executeQuery)
 
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_data", insertData)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/read_wal_strategy", read_wal_strategy_rsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/read_wal_strategy", readWalStrategyRsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal_new", UpdateWal)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_successful_nodes_wal", UpdateSuccessfulNodesWal)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/trigger_recover_data_nodes", TriggerRecoverDataInNodes)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/query_data_sharding_rsocket", query_data_sharding_rsocket)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/get_server_free_memory", get_server_free_memory)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/query_data_sharding_rsocket", queryDataShardingRsocket)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/get_server_free_memory", getServerFreeMemory)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal_only", UpdateWalOnly)
 
 	fmt.Println(configs.Instance_Port)
@@ -305,7 +283,7 @@ func handleConn(c net.Conn, fileName string) {
 		// echo(c, input.Text(), 1*time.Second)
 	}
 	if len(file) > 0 {
-		dump_generic(fileName, file)
+		dumpGeneric(fileName, file)
 	}
 	c.Close()
 }
@@ -357,15 +335,15 @@ func main() {
 		wal_interval = dur * time.Millisecond
 	}
 
-	get_wal_disk()
-	get_mem_table()
-	go singleton.dump_wal("------------------------------WAL---------------------------------")
+	getWalDisk()
+	getMemTable()
+	go singleton.dumpWal("------------------------------WAL---------------------------------")
 	go dump_data("------------------------------Data---------------------------------")
 
-	handleRequests_rsocket(&configs_file)
+	handleRequestsRsocket(&configs_file)
 }
 
-func get_index_table() index_table {
+func getIndexTable() index_table {
 	configfile, err := os.Open("index_table.json")
 	if err != nil {
 		fmt.Println("Index Table")
@@ -383,7 +361,7 @@ func get_index_table() index_table {
 }
 
 // Param: mem_table_from_to
-func get_mem_table() {
+func getMemTable() {
 	configfile, err := os.Open("mem_table.json")
 	if err != nil {
 		fmt.Println("Mem_table")
@@ -394,13 +372,6 @@ func get_mem_table() {
 	root, err := ioutil.ReadAll(configfile)
 	singletonTable.UnmarshalMT([]byte(root))
 
-}
-
-func check_index_manager()     {}
-func replicate_index_manager() {}
-func update_index_manager(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "update current index manager")
-	fmt.Println("Endpoint Hit: get_rows")
 }
 
 func GetParsedDocumentToMemRow(payload interface{}) (mem_row, interface{}) {

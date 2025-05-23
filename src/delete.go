@@ -5,7 +5,7 @@ import (
 	"slices"
 )
 
-func remove_index(s []mem_row, index int) []mem_row {
+func removeIndex(s []mem_row, index int) []mem_row {
 	ret := make([]mem_row, 0)
 	ret = append(ret, s[:index]...)
 	return append(ret, s[index+1:]...)

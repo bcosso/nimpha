@@ -44,7 +44,7 @@ type SqlClause struct {
 // 	sqlparserproject.Execute_parsing_process(query)
 // }
 
-func execute_query(payload interface{}) interface{} {
+func executeQuery(payload interface{}) interface{} {
 
 	payload_content, ok := payload.(map[string]interface{})
 	if !ok {
@@ -67,17 +67,17 @@ func execute_query(payload interface{}) interface{} {
 	// fmt.Println("-----------------------------------------------------------")
 	// fmt.Println(filterNew2)
 
-	// read_through(tree, "", filterNew)
+	// readThroughSyntaxTree(tree, "", filterNew)
 	// fmt.Println("-----------------------------------------------------------")
 	// fmt.Println("Filter!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	// fmt.Println("-----------------------------------------------------------")
 	// fmt.Println(filterNew)
-	result := select_data_where_worker_contains_rsocket_sql(*filterNew2, query)
+	result := selectDataWhereWorkerContainsRsocket(*filterNew2, query)
 
 	return result
 }
 
-func execute_query_delete(query string) interface{} {
+func executeQueryDelete(query string) interface{} {
 	// var action sqlparserproject.ActionExec = ParsingActionExec{}
 	// sqlparserproject.SetAction(action)
 	tree := sqlparserproject.ExecuteParsingProcess(query)
@@ -106,7 +106,7 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 		case "tables_from":
 			// determineQueryType(leaf, filter, query)
 			// filterNew := new(Filter)
-			read_through(tree, "", filter)
+			readThroughSyntaxTree(tree, "", filter)
 
 			fmt.Println("-----------------------------------------------------------")
 			fmt.Println("HERE")
@@ -311,7 +311,7 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 	}
 
 	// filterNew = newFilter()
-	// read_through(tree, "", filterNew)
+	// readThroughSyntaxTree(tree, "", filterNew)
 
 	// result := select_data_where_worker_contains_rsocket_sql(*filterNew, query)
 
@@ -342,7 +342,7 @@ func setValueToFilter(leaf sqlparserproject.CommandTree, filter *Filter) {
 func setInsertValuesComparisonFilter(leaf sqlparserproject.CommandTree, filter *Filter) interface{} {
 	if len(leaf.CommandParts) > 0 {
 		filterNewChild := new(Filter)
-		read_through(leaf, "", filterNewChild)
+		readThroughSyntaxTree(leaf, "", filterNewChild)
 		return filterNewChild
 	} else {
 		return parseCommandType(leaf)
@@ -354,7 +354,7 @@ func setInsertValuesComparisonFilter(leaf sqlparserproject.CommandTree, filter *
 func setComparisonFilterValue(leaf sqlparserproject.CommandTree) interface{} {
 	if len(leaf.CommandParts) > 0 {
 		filterNewChild := new(Filter)
-		read_through(leaf, "", filterNewChild)
+		readThroughSyntaxTree(leaf, "", filterNewChild)
 		return filterNewChild
 	} else {
 		return parseCommandType(leaf)
@@ -440,7 +440,7 @@ func setValuesToBeInsertedToFilter(tree sqlparserproject.CommandTree, filter *Fi
 // 	fmt.Println(tree)
 
 // 	// filterNew := new(Filter)
-// 	// read_through(tree, "", filterNew)
+// 	// readThroughSyntaxTree(tree, "", filterNew)
 
 // 	// fmt.Println("-----------------------------------------------------------")
 // 	// fmt.Println("Filter!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
@@ -456,7 +456,7 @@ func setValuesToBeInsertedToFilter(tree sqlparserproject.CommandTree, filter *Fi
 
 // }
 
-func return_type(nameType string) reflect.Type {
+func returnType(nameType string) reflect.Type {
 	if nameType == "string" {
 		var str string
 		return reflect.TypeOf(str)
@@ -508,12 +508,12 @@ func parseCondition(tree sqlparserproject.CommandTree, expected_context string, 
 
 		case "condition_when":
 			var conditionIf Filter
-			read_through(tree.CommandParts[(*indexCommand)-1], "where", &conditionIf)
+			readThroughSyntaxTree(tree.CommandParts[(*indexCommand)-1], "where", &conditionIf)
 			condition.ConditionIf = conditionIf
 			break
 		case "condition_then":
 			var conditionThen Filter
-			read_through(tree.CommandParts[(*indexCommand)-1], "where", &conditionThen)
+			readThroughSyntaxTree(tree.CommandParts[(*indexCommand)-1], "where", &conditionThen)
 			if conditionThen.CommandLeft == nil && len(conditionThen.SelectClause) > 0 {
 				condition.ConditionThen = conditionThen.SelectClause[0]
 			}
@@ -521,7 +521,7 @@ func parseCondition(tree sqlparserproject.CommandTree, expected_context string, 
 			break
 		case "condition_else":
 			var conditionElse Filter
-			read_through(tree.CommandParts[(*indexCommand)-1], "where", &conditionElse)
+			readThroughSyntaxTree(tree.CommandParts[(*indexCommand)-1], "where", &conditionElse)
 			if conditionElse.CommandLeft == nil && len(conditionElse.SelectClause) > 0 {
 				condition.ConditionElse = conditionElse.SelectClause[0]
 			}
@@ -540,7 +540,7 @@ func parseCondition(tree sqlparserproject.CommandTree, expected_context string, 
 	return clause
 }
 
-func read_through(tree sqlparserproject.CommandTree, expected_context string, currentFilter *Filter) {
+func readThroughSyntaxTree(tree sqlparserproject.CommandTree, expected_context string, currentFilter *Filter) {
 
 	var read_later *sqlparserproject.CommandTree
 	expected_context_next := ""
@@ -566,7 +566,7 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 			filterNew := new(Filter)
 			if len(tree.CommandParts[indexCommand].CommandParts) > 0 {
 				filterNewChild := new(Filter)
-				read_through(tree.CommandParts[indexCommand], "", filterNewChild)
+				readThroughSyntaxTree(tree.CommandParts[indexCommand], "", filterNewChild)
 				filterNew.CommandLeft = filterNewChild
 			} else {
 				filterNew.CommandLeft = parseCommandType(tree.CommandParts[indexCommand])
@@ -581,7 +581,7 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 					indexCommand++
 					if len(tree.CommandParts[indexCommand].CommandParts) > 0 {
 						filterNewChild := new(Filter)
-						read_through(tree.CommandParts[indexCommand], "", filterNewChild)
+						readThroughSyntaxTree(tree.CommandParts[indexCommand], "", filterNewChild)
 						filterNew.CommandRight = filterNewChild
 					} else {
 						// filterNew.CommandRight = tree.CommandParts[indexCommand].Clause
@@ -653,7 +653,7 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 					*read_later = command
 				} else {
 					expected_context_next = "select"
-					read_through(command, expected_context_next, filterNew)
+					readThroughSyntaxTree(command, expected_context_next, filterNew)
 
 				}
 				break
@@ -665,15 +665,15 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 				break
 			case "where":
 				expected_context = "where"
-				read_through(command, expected_context, filterNew)
+				readThroughSyntaxTree(command, expected_context, filterNew)
 				break
 			case "fields":
 				expected_context = "where"
-				read_through(command, expected_context, filterNew)
+				readThroughSyntaxTree(command, expected_context, filterNew)
 				break
 			case "condition":
 				expected_context = "where"
-				read_through(command, expected_context, currentFilter)
+				readThroughSyntaxTree(command, expected_context, currentFilter)
 				break
 			default:
 				if strings.ToLower(command.ClauseName) == "select" {
@@ -685,14 +685,14 @@ func read_through(tree sqlparserproject.CommandTree, expected_context string, cu
 
 		} else {
 			if len(tree.CommandParts[indexCommand].CommandParts) > 0 {
-				read_through(tree.CommandParts[indexCommand], "", currentFilter)
+				readThroughSyntaxTree(tree.CommandParts[indexCommand], "", currentFilter)
 			}
 		}
 		indexCommand++
 	}
 	if read_later != nil {
 		expected_context = "select"
-		read_through(*read_later, expected_context, currentFilter)
+		readThroughSyntaxTree(*read_later, expected_context, currentFilter)
 	}
 
 }
@@ -735,7 +735,7 @@ func CheckNodeForTables(tree sqlparserproject.CommandTree, currentFilter *Filter
 			alias = branch.Clause
 		}
 
-		read_through(tree, "from", filterNew)
+		readThroughSyntaxTree(tree, "from", filterNew)
 		if !IsNotSubquery {
 			newTableObject := SqlClause{Alias: alias, IsSubquery: !IsNotSubquery, SelectableObject: filterNew}
 			currentFilter.TableObject = append(currentFilter.TableObject, newTableObject)

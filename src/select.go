@@ -82,7 +82,7 @@ type mem_table_queries struct {
 // 	return rows_result
 // }
 
-func select_data_rsocket(payload interface{}) interface{} {
+func selectDataRsocket(payload interface{}) interface{} {
 	var rows []mem_row
 	var result []mem_row
 	payload_content, ok := payload.(map[string]interface{})
@@ -139,7 +139,7 @@ func select_data_rsocket(payload interface{}) interface{} {
 	return result
 }
 
-func query_data_sharding_rsocket(payload interface{}) interface{} {
+func queryDataShardingRsocket(payload interface{}) interface{} {
 	var logic_filters Filter
 	var tables []SqlClause
 	var contract TypeContract
@@ -479,7 +479,7 @@ func GetQueryDataFromShard(peer []peers, tables []SqlClause, logic_filters Filte
 	return result
 }
 
-func select_data_where_worker_contains_rsocket_sql(payload interface{}, querySql string) interface{} {
+func selectDataWhereWorkerContainsRsocket(payload interface{}, querySql string) interface{} {
 	logic_filters := payload.(Filter)
 	ctx := make(map[string]interface{})
 	var tableWorking []SqlClause
@@ -831,7 +831,7 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx *map[string]in
 	}
 }
 
-func select_table(payload interface{}) interface{} {
+func selectTable(payload interface{}) interface{} {
 
 	payload_content, ok := payload.(map[string]interface{})
 	if !ok {
@@ -889,28 +889,6 @@ func isTableInQueryObject(tableName string, ctx *map[string]interface{}) bool {
 	_, found := _query[tableName]
 	return found
 }
-
-// func isInMemTable(tableObject SqlClause, selectObject []SqlClause, ctx *map[string]interface{}) bool {
-// 	result := false
-// 	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
-// 	// var clauseValidation sqlparserproject.CommandTree
-
-// 	for _, row := range mt.Rows {
-// 		if (row.Table_name == tableObject.Name) || (row.Table_name == tableObject.Alias) {
-// 			name := ""
-// 			if (row.Table_name == tableObject.Name) && (tableObject.Alias == "") {
-// 				name = tableObject.Name
-// 			} else {
-// 				name = tableObject.Alias
-// 			}
-// 			newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
-// 			_query[name] = append(_query[name], newRow)
-// 			result = true
-// 		}
-// 	}
-
-// 	return result
-// }
 
 func GetValueFromFilter(contentMemRow interface{}, referenceType interface{}) interface{} {
 	str := ""
@@ -974,7 +952,7 @@ func GetComparisonTypeAndCompare(gateName string, leftValue bool, rightValue boo
 	return false
 }
 
-func select_data_rsocket_sql(payload interface{}) interface{} {
+func selectDataRsocket_sql(payload interface{}) interface{} {
 
 	var rows []mem_row
 	var result []mem_row

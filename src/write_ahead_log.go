@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func get_wal_disk() {
+func getWalDisk() {
 	configfile, err := os.Open("wal_file.json")
 	if err != nil {
 		fmt.Println("Wal file")
@@ -45,7 +45,7 @@ func get_wal_disk() {
 	singleton.UnmarshalWAL([]byte(root))
 }
 
-func read_wal_rsocket(payload interface{}) interface{} {
+func readWalRsocket(payload interface{}) interface{} {
 
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
@@ -147,7 +147,7 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 	}
 }
 
-func read_wal_strategy_rsocket(payload interface{}) interface{} {
+func readWalStrategyRsocket(payload interface{}) interface{} {
 
 	fullPayload := make(map[string]interface{})
 
@@ -348,7 +348,7 @@ func UpdateWal(payload interface{}) interface{} {
 
 	if wo.Operation_type == "delete" {
 		//call execute_query locally instead with the query
-		execute_query_delete(wo.Query)
+		executeQueryDelete(wo.Query)
 		// deleteWorkerOld(string(jsonParam))
 	} else {
 		insertWorker(string(jsonParam))

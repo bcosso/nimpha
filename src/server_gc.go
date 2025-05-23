@@ -14,12 +14,12 @@ var wal_limit int = 0
 func dump_data(s string) {
 	for true {
 		time.Sleep(data_interval)
-		dump_it(s)
-		singletonTable.dump_mt(s)
+		dumpIT(s)
+		singletonTable.dumpMT(s)
 	}
 }
 
-func (sing *SingletonTable) dump_mt(s string) {
+func (sing *SingletonTable) dumpMT(s string) {
 	sing.mu.Lock()
 	file, _ := json.MarshalIndent(sing.mt, "", " ")
 	_ = ioutil.WriteFile("mem_table.json", file, 0644)
@@ -28,14 +28,14 @@ func (sing *SingletonTable) dump_mt(s string) {
 	//fmt.Println(mt)
 }
 
-func dump_generic(fileName string, file []byte) {
+func dumpGeneric(fileName string, file []byte) {
 	err := ioutil.WriteFile(fileName, file, 0600)
 	if err != nil {
 		fmt.Println(err)
 	}
 }
 
-func (sing *SingletonWal) dump_wal(s string) {
+func (sing *SingletonWal) dumpWal(s string) {
 	for true {
 		time.Sleep(wal_interval)
 		sing.mu.Lock()
@@ -58,12 +58,12 @@ func (sing *SingletonWal) dump_wal(s string) {
 	}
 }
 
-func dump_it(s string) {
+func dumpIT(s string) {
 	file, _ := json.MarshalIndent(it, "", " ")
 	_ = ioutil.WriteFile("index_table.json", file, 0644)
 }
 
-func dump_config(s string) {
+func dumpConfig(s string) {
 	file, _ := json.MarshalIndent(configs_file, "", " ")
 	_ = ioutil.WriteFile("configfile.json", file, 0644)
 	fmt.Println(s)
@@ -74,7 +74,7 @@ func checkFreeMemory() int64 {
 	return getFreeMemory()
 }
 
-func get_server_free_memory(payload interface{}) interface{} {
+func getServerFreeMemory(payload interface{}) interface{} {
 	mem := checkFreeMemory()
 	return mem
 }
