@@ -533,7 +533,7 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 	if len(logic_filters.ChildFilters) > 0 {
 		if len(logic_filters.ChildFilters[0].SelectClause) > 0 {
 
-			tables = lookForRelatedTablesInFilters2(logic_filters, indexFilter)
+			tables = lookForRelatedTablesInFilters(logic_filters, indexFilter)
 			var tableWorking []string
 			// TODO
 			// Get the Sharding strategy. After that send to the correspondent nodes via select_data_where_worker_contains_rsocket_sql with the filters
@@ -648,7 +648,7 @@ func GetTableSummarize(tables []string, filter Filter, selectObject []SqlClause,
 	for _, table := range tables {
 		index := 0
 		for index < len(_query[table]) {
-			if applyLogic2(_query[table][index], &filter, ctx) {
+			if evaluateLogic(_query[table][index], &filter, ctx) {
 				columns := make(map[string]interface{})
 				for _, column := range selectObject {
 					if !checkSelectStar(column, &columns, _query[table][index]) {
@@ -849,7 +849,7 @@ func selectTable(payload interface{}) interface{} {
 	return rows_result
 }
 
-func lookForRelatedTablesInFilters2(fullLogicFilters Filter, level int) []SqlClause {
+func lookForRelatedTablesInFilters(fullLogicFilters Filter, level int) []SqlClause {
 	var tables []SqlClause
 	if len(fullLogicFilters.TableObject) > 0 {
 		tables = append(tables, fullLogicFilters.TableObject...)
@@ -857,23 +857,13 @@ func lookForRelatedTablesInFilters2(fullLogicFilters Filter, level int) []SqlCla
 	return tables
 }
 
-func lookForFinalFiltersInFilters2(fullLogicFilters Filter, level int) []SqlClause {
+func lookForFinalFiltersInFilters(fullLogicFilters Filter, level int) []SqlClause {
 	// check for filters of type numeric or string, to filter in the worker nodes
 	var tables []SqlClause
 	if len(fullLogicFilters.TableObject) > 0 {
 		tables = append(tables, fullLogicFilters.TableObject...)
 	}
 	return tables
-}
-
-func lookForRelatedFiltersInFilters(fullLogicFilters Filter, level int) []Filter {
-	var filters []Filter
-	for _, filter := range fullLogicFilters.ChildFilters {
-		if filter.CommandLeft != nil {
-			filters = append(filters, filter)
-		}
-	}
-	return filters
 }
 
 func isInQueryObject(selectableObject SqlClause, ctx *map[string]interface{}) bool {
@@ -1007,7 +997,7 @@ func selectDataRsocket_sql(payload interface{}) interface{} {
 }
 
 // var _analyzedFilterList map[string]int
-func applyLogic2(current_row mem_table_queries, logicObject2 *Filter, ctx *map[string]interface{}) bool {
+func evaluateLogic(current_row mem_table_queries, logicObject2 *Filter, ctx *map[string]interface{}) bool {
 	result := false
 	previousResult := false
 	previousGate := ""
@@ -1023,7 +1013,7 @@ func applyLogic2(current_row mem_table_queries, logicObject2 *Filter, ctx *map[s
 			commandFilterLeft := filter.CommandLeft.(Filter)
 			commandFilterRight := filter.CommandRight.(Filter)
 			if len(commandFilterLeft.ChildFilters) > 0 {
-				result = applyLogic2(current_row, &commandFilterLeft, ctx)
+				result = evaluateLogic(current_row, &commandFilterLeft, ctx)
 			} else if len(commandFilterRight.ChildFilters) > 0 {
 				//These two scenarios above have to be detailed.
 			} else {
@@ -1073,14 +1063,14 @@ func applyLogic2(current_row mem_table_queries, logicObject2 *Filter, ctx *map[s
 		} else if reflect.TypeOf(filter.CommandLeft) == reflect.TypeOf(filter) {
 			commandFilterLeft := filter.CommandLeft.(Filter)
 			if len(commandFilterLeft.ChildFilters) > 0 {
-				result = applyLogic2(current_row, &commandFilterLeft, ctx)
+				result = evaluateLogic(current_row, &commandFilterLeft, ctx)
 			} else {
 				result = GetFilterAndFilter2(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
 			}
 		} else if reflect.TypeOf(filter.CommandRight) == reflect.TypeOf(filter) {
 			commandFilterRight := filter.CommandRight.(Filter)
 			if len(commandFilterRight.ChildFilters) > 0 {
-				result = applyLogic2(current_row, &commandFilterRight, ctx)
+				result = evaluateLogic(current_row, &commandFilterRight, ctx)
 			} else {
 				result = GetFilterAndFilter2(filter.Operation, filter.CommandLeft, filter.CommandRight, current_row)
 			}
@@ -1089,7 +1079,7 @@ func applyLogic2(current_row mem_table_queries, logicObject2 *Filter, ctx *map[s
 
 			if filter.CommandLeft == nil {
 				if len(filter.ChildFilters) > 0 {
-					result = applyLogic2(current_row, &filter, ctx)
+					result = evaluateLogic(current_row, &filter, ctx)
 				}
 			} else {
 				//if current row has prefix, we need to check in this method if the prefix corresponds to the table name/alias of the commandleft or command right

@@ -751,7 +751,7 @@ func GetConditionFlow(row mem_table_queries, column SqlClause, ctx *map[string]i
 	condition := column.SelectableObject.(Condition)
 	filterIf := condition.ConditionIf
 
-	if applyLogic2(row, &filterIf, ctx) {
+	if evaluateLogic(row, &filterIf, ctx) {
 		clauseThen := condition.ConditionThen.(SqlClause)
 		column = GetFlowAfterLogic(row, clauseThen, ctx)
 	} else {
