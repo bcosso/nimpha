@@ -42,7 +42,7 @@ content-type: application/json
 
 {
     "method": "execute_query",
-    "query": "delete * from tabclient where email = 'julio@someplace.com'"
+    "query": "delete from tabclient where email = 'julio@someplace.com'"
 }
 ```
 
