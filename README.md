@@ -13,17 +13,38 @@ docker build -t imagename -f dockerfile .
 docker run -it -p 10001:10000 -p 8001:8000 -p 9091:9090 imagename
 ```
 For testing the docker image a post request to the localhost port 9091 with a query can be executed:
+
+Insert in the table (and creates it if it doesn't exists:
 ```
 POST http://127.0.0.1:9091/execute_query_method HTTP/1.1
 content-type: application/json
 
 {
     "method": "execute_query",
-    "query": "select * from table2"
+    "query": "insert into tabclient (clientid, name, address, country , email) VALUES (3, 'Julio', 'Fazenda', 'BR', 'julio@someplace.com')"
+}
+```
+Select from that table
+```
+POST http://127.0.0.1:9091/execute_query_method HTTP/1.1
+content-type: application/json
+
+{
+    "method": "execute_query",
+    "query": "select * from tabclient"
 }
 ```
 
+Delete from that table
+```
+POST http://127.0.0.1:9091/execute_query_method HTTP/1.1
+content-type: application/json
 
+{
+    "method": "execute_query",
+    "query": "delete * from tabclient where email = 'julio@someplace.com'"
+}
+```
 
 TODO:
  - Update
