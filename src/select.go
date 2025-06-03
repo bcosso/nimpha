@@ -1253,13 +1253,16 @@ func GetClauseFromValue(interfaceValue interface{}) sqlparserproject.CommandTree
 
 // /////////////////////////////////////Mutex///////////////////////////////////////////////////////////
 func (sing *SingletonTable) SelectTable(table_name string, alias string) []mem_table_queries {
+	if table_name == "" {
+		table_name = alias
+	}
 	sing.mu.RLock()
 	defer sing.mu.RUnlock()
 	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	fmt.Println("Result for distributed Query in Node")
 	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	var rows_result []mem_table_queries
-	for _, row := range sing.mt.Rows {
+	for _, row := range sing.mt[table_name] {
 		if row.Table_name == table_name {
 
 			if alias != "" {
@@ -1281,10 +1284,12 @@ func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []S
 	result := false
 	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
 	// var clauseValidation sqlparserproject.CommandTree
+	tableName := tableObject.Name
+
 	sing.mu.RLock()
 	defer sing.mu.RUnlock()
 
-	for _, row := range sing.mt.Rows {
+	for _, row := range sing.mt[tableName] {
 		if (row.Table_name == tableObject.Name) || (row.Table_name == tableObject.Alias) {
 			name := ""
 			if (row.Table_name == tableObject.Name) && (tableObject.Alias == "") {

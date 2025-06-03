@@ -119,7 +119,7 @@ type SingletonWal struct {
 }
 
 type SingletonTable struct {
-	mt mem_table
+	mt map[string][]mem_row
 	mu sync.RWMutex
 }
 

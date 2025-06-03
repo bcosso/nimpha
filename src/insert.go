@@ -101,7 +101,7 @@ func insertWorker(payload interface{}) interface{} {
 func (sing *SingletonTable) InsertWorker(p mem_row) string {
 
 	sing.mu.Lock()
-	sing.mt.Rows = append(sing.mt.Rows, p)
+	sing.mt[p.Table_name] = append(sing.mt[p.Table_name], p)
 	sing.mu.Unlock()
 	return "Success"
 }

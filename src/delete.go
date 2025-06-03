@@ -70,16 +70,16 @@ func (sing *SingletonTable) DeleteWorker(filterLogic *Filter, ctx *map[string]in
 	indexRow := 0
 	sing.mu.Lock()
 
-	for indexRow < len(sing.mt.Rows) {
+	for indexRow < len(sing.mt[filterLogic.TableObject[0].Name]) {
 		var mem_table_query mem_table_queries
-		mem_table_query.Rows = sing.mt.Rows[indexRow].Parsed_Document
+		mem_table_query.Rows = sing.mt[filterLogic.TableObject[0].Name][indexRow].Parsed_Document
 		if evaluateLogic(mem_table_query, filterLogic, ctx) {
 			// sing.mu.Lock()
 			fmt.Println("----------------------------------------------------------------------------------")
 			fmt.Println("Found to delete")
 			fmt.Println("----------------------------------------------------------------------------------")
 
-			sing.mt.Rows = slices.Delete(sing.mt.Rows, indexRow, indexRow+1)
+			sing.mt[filterLogic.TableObject[0].Name] = slices.Delete(sing.mt[filterLogic.TableObject[0].Name], indexRow, indexRow+1)
 			// sing.mu.Unlock()
 			indexRow--
 		}
