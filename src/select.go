@@ -892,10 +892,12 @@ func GetValueFromFilter(contentMemRow interface{}, referenceType interface{}) in
 		result = strings.Replace(contentMemRow.(string), "'", "", -1)
 		break
 	case reflect.TypeOf(intVar):
-		result, _ = strconv.Atoi(contentMemRow.(string))
+		str := fmt.Sprintf("%v", contentMemRow)
+		result, _ = strconv.Atoi(str)
 		break
 	case reflect.TypeOf(floatVar):
-		result, _ = strconv.ParseFloat(contentMemRow.(string), 64)
+		str := fmt.Sprintf("%v", contentMemRow)
+		result, _ = strconv.ParseFloat(str, 64)
 		break
 	default:
 		result = ""
@@ -1137,7 +1139,7 @@ func GetFilterAndFilter2(operator string, leftValue interface{}, rightValue inte
 		if clause.Clause == "table_name" {
 			newRightValue = GetValueFromFilter(row.TableName, leftValue) //Not passing here anymore, since table logic is being handled elsewhere.
 		} else if mapRow[clause.Clause] != nil {
-			newRightValue = GetValueFromFilter(mapRow[clause.Clause].(string), leftValue)
+			newRightValue = GetValueFromFilter(mapRow[clause.Clause], leftValue)
 		}
 		newLeftValue = leftValue
 	} else if side == 2 {
@@ -1145,7 +1147,7 @@ func GetFilterAndFilter2(operator string, leftValue interface{}, rightValue inte
 		if clause.Clause == "table_name" {
 			newLeftValue = GetValueFromFilter(row.TableName, rightValue) //Not passing here anymore, since table logic is being handled elsewhere.
 		} else if mapRow[clause.Clause] != nil {
-			newLeftValue = GetValueFromFilter(mapRow[clause.Clause].(string), rightValue)
+			newLeftValue = GetValueFromFilter(mapRow[clause.Clause], rightValue)
 		}
 
 		newRightValue = rightValue

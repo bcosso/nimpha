@@ -119,8 +119,9 @@ type SingletonWal struct {
 }
 
 type SingletonTable struct {
-	mt map[string][]mem_row
-	mu sync.RWMutex
+	mt        map[string][]*mem_row
+	hashIndex map[string]map[string]*mem_row
+	mu        sync.RWMutex
 }
 
 var it index_table = getIndexTable()

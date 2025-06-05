@@ -99,9 +99,9 @@ func insertWorker(payload interface{}) interface{} {
 }
 
 func (sing *SingletonTable) InsertWorker(p mem_row) string {
-
+	pointerMemRow := &p
 	sing.mu.Lock()
-	sing.mt[p.Table_name] = append(sing.mt[p.Table_name], p)
+	sing.mt[p.Table_name] = append(sing.mt[p.Table_name], pointerMemRow)
 	sing.mu.Unlock()
 	return "Success"
 }
