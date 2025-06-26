@@ -26,22 +26,30 @@ import (
 )
 
 type config struct {
-	Folder_Path     string  `json:"path"`
-	Peers           []peers `json:"peers"`
-	Number_Replicas string  `json:"number_replicas"`
-	Max_Heap_Size   string  `json:"max_heap_size"`
-	Instance_ip     string  `json:"instance_ip"`
-	Instance_name   string  `json:"instance_name"`
-	Instance_Port   string  `json:"instance_port"`
-	Sync_Port       string  `json:"sync_port"`
-	Data_Interval   string  `json:"data_interval"`
-	Wal_Interval    string  `json:"wal_interval"`
-	Wal_Limit       string  `json:"wal_limit"`
+	Folder_Path     string                  `json:"path"`
+	Peers           []peers                 `json:"peers"`
+	Number_Replicas string                  `json:"number_replicas"`
+	Max_Heap_Size   string                  `json:"max_heap_size"`
+	Instance_ip     string                  `json:"instance_ip"`
+	Instance_name   string                  `json:"instance_name"`
+	Instance_Port   string                  `json:"instance_port"`
+	Sync_Port       string                  `json:"sync_port"`
+	Data_Interval   string                  `json:"data_interval"`
+	Wal_Interval    string                  `json:"wal_interval"`
+	Wal_Limit       string                  `json:"wal_limit"`
+	Index           map[string][]TableIndex `json:"index_definition"`
 	//RANGE, ALPHABETICAL, TABLE
 	Sharding_type     string                   `json:sharding_type`
 	Sharding_column   string                   `json:sharding_column`
 	Sharding_groups   []ShardGroup             `json:sharding_groups`
 	Sharding_strategy map[string]ShardStrategy `json:sharding_strategy`
+}
+
+type TableIndex struct {
+	TableName  string `json:"table_name"`
+	ColumnName string `json:"column_name"`
+	//HASH, btree
+	IndexType string `json:"index_type"`
 }
 
 type peers struct {
@@ -119,8 +127,9 @@ type SingletonWal struct {
 }
 
 type SingletonTable struct {
-	mt        map[string][]*mem_row
-	hashIndex map[string]map[string]*mem_row
+	mt map[string][]*mem_row
+	//		       table     column     value
+	hashIndex map[string]map[string]map[string]*mem_row
 	mu        sync.RWMutex
 }
 
@@ -338,10 +347,42 @@ func main() {
 
 	getWalDisk()
 	getMemTable()
+	singletonTable.AttachAllIndexesToData()
 	go singleton.dumpWal("------------------------------WAL---------------------------------")
 	go dump_data("------------------------------Data---------------------------------")
 
 	handleRequestsRsocket(&configs_file)
+}
+
+func (sing *SingletonTable) AttachAllIndexesToData() {
+	for _, indexTable := range configs_file.Index {
+		for _, index := range indexTable {
+			sing.AttachNewIndex(index)
+		}
+	}
+}
+
+func (sing *SingletonTable) AttachNewIndex(index TableIndex) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+
+	if sing.hashIndex == nil {
+		sing.hashIndex = make(map[string]map[string]map[string]*mem_row)
+	}
+
+	if _, ok := sing.hashIndex[index.TableName]; !ok {
+		sing.hashIndex[index.TableName] = make(map[string]map[string]*mem_row)
+	}
+
+	if _, ok := sing.hashIndex[index.TableName][index.ColumnName]; !ok {
+		sing.hashIndex[index.TableName][index.ColumnName] = make(map[string]*mem_row)
+	}
+
+	for iRow, row := range sing.mt[index.TableName] {
+		str := fmt.Sprintf("%v", row.Parsed_Document[index.ColumnName])
+		fmt.Println("Index!!")
+		sing.hashIndex[index.TableName][index.ColumnName][str] = sing.mt[index.TableName][iRow]
+	}
 }
 
 func getIndexTable() index_table {

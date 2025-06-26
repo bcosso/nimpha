@@ -563,13 +563,15 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 			fmt.Println("The Tables")
 			fmt.Println(tables)
 			fmt.Println("----------------------------------------------------------------------------------")
+
 			if len(tables) > 0 {
 				for _, table := range tables {
 					//Check existance in query_objects
 					foundMemTable := isInQueryObject(table, ctx)
 					if !foundMemTable {
 						//Check existance in (index_ for distributed) mem_table
-						if singletonTable.IsInMemTable(table, logic_filters.ChildFilters[0].SelectClause, ctx) == false {
+
+						if singletonTable.IsInMemTable(table, logic_filters.ChildFilters[0].SelectClause, logic_filters, ctx) == false {
 							fmt.Println("----------------------------------------------------------------------------------")
 							fmt.Println("Not In MemTable")
 							fmt.Println(tables)
@@ -638,6 +640,8 @@ func GetTableSummarize(tables []string, filter Filter, selectObject []SqlClause,
 	tableWrite := ""
 	fmt.Println("----------------------------------------------------------------------------------")
 	fmt.Println("GetTableSummarize")
+
+	// ManageQueryIndexes(filter)
 
 	if aliasSubquery != "" {
 		tableWrite = aliasSubquery
@@ -782,7 +786,7 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx *map[string]in
 		// 	return
 		// }
 		//need to check the safety of doing this in parallel
-		if !singletonTable.IsInMemTable(table, filter.ChildFilters[0].SelectClause, ctx) {
+		if !singletonTable.IsInMemTable(table, filter.ChildFilters[0].SelectClause, filter, ctx) {
 
 			for _, ir := range configs_file.Peers {
 				if configs_file.Instance_name != ir.Name {
@@ -1282,11 +1286,16 @@ func (sing *SingletonTable) SelectTable(table_name string, alias string) []mem_t
 	return rows_result
 }
 
-func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []SqlClause, ctx *map[string]interface{}) bool {
+func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []SqlClause, filter Filter, ctx *map[string]interface{}) bool {
 	result := false
 	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
 	// var clauseValidation sqlparserproject.CommandTree
 	tableName := tableObject.Name
+
+	//Place to call the Index verification. I need the filtter here
+	if ManageQueryIndexes(filter, ctx) {
+		return true
+	}
 
 	sing.mu.RLock()
 	defer sing.mu.RUnlock()
@@ -1299,6 +1308,7 @@ func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []S
 			} else {
 				name = tableObject.Alias
 			}
+
 			newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
 			_query[name] = append(_query[name], newRow)
 			result = true
@@ -1306,4 +1316,83 @@ func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []S
 	}
 
 	return result
+}
+
+func ManageQueryIndexes(filter Filter, ctx *map[string]interface{}) bool {
+	fmt.Println("000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+	fmt.Println("Filter")
+	fmt.Println(filter.ChildFilters[2])
+	fmt.Println(filter.ChildFilters[2].ChildFilters[0].CommandLeft)
+	fmt.Println(reflect.TypeOf(filter.ChildFilters[2].ChildFilters[0].CommandLeft))
+	fmt.Println(len(filter.ChildFilters[2].ChildFilters))
+
+	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
+	// var checkCommandTree sqlparserproject.CommandTree
+	//Does the table have indexes?
+	_, exists := configs_file.Index[filter.TableObject[0].Name]
+
+	if exists {
+		name := filter.TableObject[0].Name
+		for _, index := range configs_file.Index[filter.TableObject[0].Name] {
+
+			for _, child := range filter.ChildFilters[2].ChildFilters {
+				rightValue := child.CommandRight
+				leftValue := child.CommandLeft
+
+				if index.IndexType == "HASH" {
+
+					//add row to result as mem_table_queries if there is no more filters for now
+					side, cTree := CheckWhichSideContainsColumn(leftValue, rightValue)
+					var value string
+					//side = 0 - both, side = 1 - right, side = 2 - left, side = -1 - none
+
+					switch side {
+					case 1:
+						hashIndex, existsInIndex := singletonTable.hashIndex[filter.TableObject[0].Name][cTree.Clause]
+						value = fmt.Sprintf("%v", leftValue)
+						if existsInIndex {
+							row := *hashIndex[value]
+							newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
+							_query[name] = append(_query[name], newRow)
+							return true
+
+						}
+						break
+					case 2:
+						hashIndex, existsInIndex := singletonTable.hashIndex[filter.TableObject[0].Name][cTree.Clause]
+						value = fmt.Sprintf("%v", rightValue)
+						if existsInIndex {
+							row := *hashIndex[value]
+							newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
+							_query[name] = append(_query[name], newRow)
+							return true
+
+						}
+						break
+					}
+
+					// GetValueFromFilter
+					// cTree := child.CommandLeft.(sqlparserproject.CommandTree)
+
+				} else if index.IndexType == "BTREE" {
+
+				}
+
+			}
+
+			// check indexType
+			// if index == Hash AND it is part of the query AND there is no other condition
+			// if index == Btree AND it is part of the query
+		}
+	}
+
+	//check what columns are part
+	// configs_file.Index[filter.TableObject[0].Name].
+	//if filter.TableObject[0].Name //Check how this is going to wok for subqueries
+	//if column.Alias is in singletonTable.hashIndex
+	//
+
+	fmt.Println("000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+
+	return false
 }
