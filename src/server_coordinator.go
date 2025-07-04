@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,6 +127,14 @@ type SingletonWal struct {
 	mu  sync.RWMutex
 }
 
+type SingletonIndex struct {
+	mt map[string][]*mem_row
+	//		       table     column     value
+	hashIndex  map[string]map[string]map[string]*mem_row
+	btreeIndex map[string]map[string][]*mem_row
+	mu         sync.RWMutex
+}
+
 type SingletonTable struct {
 	mt map[string][]*mem_row
 	//		       table     column     value
@@ -231,7 +240,6 @@ func handleRequestsRsocket(configs *config) {
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal_new", UpdateWal)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_successful_nodes_wal", UpdateSuccessfulNodesWal)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/trigger_recover_data_nodes", TriggerRecoverDataInNodes)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/query_data_sharding_rsocket", queryDataShardingRsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/get_server_free_memory", getServerFreeMemory)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal_only", UpdateWalOnly)
 
@@ -348,41 +356,11 @@ func main() {
 	getWalDisk()
 	getMemTable()
 	singletonTable.AttachAllIndexesToData()
+	singletonIndex.AttachAllIndexes()
 	go singleton.dumpWal("------------------------------WAL---------------------------------")
 	go dump_data("------------------------------Data---------------------------------")
 
 	handleRequestsRsocket(&configs_file)
-}
-
-func (sing *SingletonTable) AttachAllIndexesToData() {
-	for _, indexTable := range configs_file.Index {
-		for _, index := range indexTable {
-			sing.AttachNewIndex(index)
-		}
-	}
-}
-
-func (sing *SingletonTable) AttachNewIndex(index TableIndex) {
-	sing.mu.Lock()
-	defer sing.mu.Unlock()
-
-	if sing.hashIndex == nil {
-		sing.hashIndex = make(map[string]map[string]map[string]*mem_row)
-	}
-
-	if _, ok := sing.hashIndex[index.TableName]; !ok {
-		sing.hashIndex[index.TableName] = make(map[string]map[string]*mem_row)
-	}
-
-	if _, ok := sing.hashIndex[index.TableName][index.ColumnName]; !ok {
-		sing.hashIndex[index.TableName][index.ColumnName] = make(map[string]*mem_row)
-	}
-
-	for iRow, row := range sing.mt[index.TableName] {
-		str := fmt.Sprintf("%v", row.Parsed_Document[index.ColumnName])
-		fmt.Println("Index!!")
-		sing.hashIndex[index.TableName][index.ColumnName][str] = sing.mt[index.TableName][iRow]
-	}
 }
 
 func getIndexTable() index_table {
@@ -598,112 +576,6 @@ func ParseObjectTypeToContract(object interface{}, objectType *TypeContract) int
 	return object
 }
 
-func ParseContractToObjectType(object interface{}, contract TypeContract, objectResult interface{}) interface{} {
-
-	v := reflect.ValueOf(object)
-
-	ps := reflect.ValueOf(&object)
-	// struct
-	s := ps.Elem().Elem()
-	// for _, v := range contract.ChildrenType {
-	// 	fmt.Println(v.NameType)
-	// }
-	fmt.Println("-----------------------------------------------------")
-	fmt.Println("Entered ParseContractToObjectType")
-	fmt.Println(s.String())
-
-	if v.Kind() == reflect.Slice {
-		// fmt.Println("Size of slice:")
-		// fmt.Println(v.Len())
-		fmt.Println("-----------------------------------------------------")
-		fmt.Println("Has a slice")
-		// values := make([]interface{}, v.Len())
-		for i := 0; i < v.Len(); i++ {
-			currentInterface := v.Index(i).Interface()
-			if reflect.ValueOf(currentInterface).Kind() == reflect.Struct || reflect.ValueOf(currentInterface).Kind() == reflect.Slice {
-				result := ParseContractToObjectType(currentInterface, contract.ChildrenType[i], objectResult)
-				v.Index(i).Set(reflect.ValueOf(result))
-			}
-		}
-	} else if v.Kind() == reflect.Struct {
-		values := make([]interface{}, v.NumField())
-		// fmt.Println("------------------------------------")
-		// fmt.Println(v.NumField())
-		// fmt.Println(len(contract.ChildrenType))
-		// fmt.Println(len(contract.ChildrenType[1].ChildrenType))
-		// fmt.Println("------------------------------------")
-		// fmt.Println(contract.ChildrenType[1].ChildrenType)
-
-		for i := 0; i < v.NumField(); i++ {
-			values[i] = v.Field(i).Interface()
-			fieldName := v.Type().Field(i).Name
-			vValue := reflect.ValueOf(values[i])
-			// fmt.Println("=============================================================")
-			// fmt.Println(reflect.TypeOf(values[i]))
-			// fmt.Println(reflect.TypeOf(vValue))
-			// fmt.Println(vValue.Kind())
-			// fmt.Println(contract.ChildrenType[i].NameType)
-			// // fmt.Println(reflect.TypeOf(values[i]).String() == contract.ChildrenType[i].NameType)
-			// // fmt.Println(contract.ChildrenType)
-			// // fmt.Println(v)
-			// fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-			if reflect.TypeOf(values[i]) != nil {
-
-				// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-				// fmt.Println("CONVERSAO POLEMICA")
-				// fmt.Println(typeRegistry)
-				// fmt.Println("/" + contract.ChildrenType[i].NameType + "/")
-				// fmt.Println(typeRegistry[contract.ChildrenType[i].NameType])
-				// fmt.Println(typeRegistry[contract.ChildrenType[i].NameType] == nil)
-				// fmt.Println(contract.ChildrenType[i].NameType == "")
-				// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-				if contract.ChildrenType[i].NameType != "" && contract.ChildrenType[i].NameType != "ptr" {
-					fmt.Println("--------------------------------")
-					fmt.Println(contract.ChildrenType[i].NameType)
-					fmt.Println(reflect.TypeOf(values[i]).Name)
-					fmt.Println(fieldName)
-
-					fmt.Println("--------------------------------")
-					// fmt.Println(typeRegistry)
-					// fmt.Println(typeRegistry[contract.ChildrenType[i].NameType])
-					// newValue := vValue.Convert(typeRegistry[contract.ChildrenType[i].NameType])
-					newValue := reflect.ValueOf(ConvertTypes(vValue, contract.ChildrenType[i].NameType))
-					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-					// fmt.Println(newValue)
-					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-					// fmt.Println(vValue)
-					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-					if vValue.Kind() == reflect.Struct || vValue.Kind() == reflect.Slice || vValue.Kind() == reflect.Map {
-						intValue := ParseContractToObjectType(values[i], contract.ChildrenType[i], newValue)
-						newValue = reflect.ValueOf(ConvertTypes(intValue, contract.ChildrenType[i].NameType))
-						if reflect.TypeOf(values[i]).String() != contract.ChildrenType[i].NameType {
-							fmt.Println("00000000000000000000000000000000000000000000000000000")
-							fmt.Println("SHOULD GO IN")
-							fmt.Println("-----------------------------------------------------")
-							f := s.FieldByName(fieldName)
-							if f.IsValid() {
-								fmt.Println("-----------------------------------------------------")
-								fmt.Println("WAS VALID")
-								fmt.Println("-----------------------------------------------------")
-								if f.CanSet() {
-									fmt.Println("-----------------------------------------------------")
-									fmt.Println("Set a new value to Variable")
-									f.Set(newValue)
-									fmt.Println(newValue)
-								}
-							}
-						}
-					}
-
-				}
-			}
-		}
-	} else {
-
-	}
-	return object
-}
-
 func validateTypeName(name string) string {
 	return strings.Replace(name, "main.", "", -1)
 }
@@ -737,6 +609,7 @@ func ConvertTypes(object interface{}, name string) interface{} {
 // ///////////////////////////////////////////////////////////////////////Mutex//////////////////////////////////////////////////////////////////
 var singleton SingletonWal
 var singletonTable SingletonTable
+var singletonIndex SingletonIndex
 
 func (sing *SingletonWal) UnmarshalWAL(fileData []byte) {
 	sing.mu.Lock()
@@ -870,4 +743,100 @@ func (sing *SingletonWal) Get(guid string) wal_operation {
 	sing.mu.RLock()
 	defer sing.mu.RUnlock()
 	return sing.wal[guid]
+}
+
+func (sing *SingletonTable) AttachAllIndexesToData() {
+	for _, indexTable := range configs_file.Index {
+		for _, index := range indexTable {
+			sing.AttachNewIndex(index)
+		}
+	}
+}
+
+func (sing *SingletonTable) AttachNewIndex(index TableIndex) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+
+	if sing.hashIndex == nil {
+		sing.hashIndex = make(map[string]map[string]map[string]*mem_row)
+	}
+
+	if _, ok := sing.hashIndex[index.TableName]; !ok {
+		sing.hashIndex[index.TableName] = make(map[string]map[string]*mem_row)
+	}
+
+	if _, ok := sing.hashIndex[index.TableName][index.ColumnName]; !ok {
+		sing.hashIndex[index.TableName][index.ColumnName] = make(map[string]*mem_row)
+	}
+
+	for iRow, row := range sing.mt[index.TableName] {
+		str := fmt.Sprintf("%v", row.Parsed_Document[index.ColumnName])
+		fmt.Println("Index!!")
+		sing.hashIndex[index.TableName][index.ColumnName][str] = sing.mt[index.TableName][iRow]
+	}
+}
+
+func (sing *SingletonIndex) AttachAllIndexes() {
+	for _, indexTable := range configs_file.Index {
+		for _, index := range indexTable {
+			if index.IndexType == "HASH" {
+				sing.AttachNewHashIndex(index)
+			} else if index.IndexType == "BTREE" {
+				fmt.Println("Index!!BTREE!!")
+				sing.AttachNewBTreeIndex(index)
+			}
+		}
+	}
+}
+
+func (sing *SingletonIndex) AttachNewHashIndex(index TableIndex) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+
+	if sing.hashIndex == nil {
+		sing.hashIndex = make(map[string]map[string]map[string]*mem_row)
+	}
+
+	if _, ok := sing.hashIndex[index.TableName]; !ok {
+		sing.hashIndex[index.TableName] = make(map[string]map[string]*mem_row)
+	}
+
+	if _, ok := sing.hashIndex[index.TableName][index.ColumnName]; !ok {
+		sing.hashIndex[index.TableName][index.ColumnName] = make(map[string]*mem_row)
+	}
+
+	for iRow, row := range sing.mt[index.TableName] {
+		str := fmt.Sprintf("%v", row.Parsed_Document[index.ColumnName])
+		fmt.Println("Index!!")
+		sing.hashIndex[index.TableName][index.ColumnName][str] = sing.mt[index.TableName][iRow]
+	}
+}
+
+func (sing *SingletonIndex) AttachNewBTreeIndex(index TableIndex) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	if sing.btreeIndex == nil {
+		sing.btreeIndex = make(map[string]map[string][]*mem_row)
+	}
+
+	if _, ok := sing.btreeIndex[index.TableName]; !ok {
+		sing.btreeIndex[index.TableName] = make(map[string][]*mem_row)
+	}
+
+	fmt.Println("Index!! btree1111!!")
+	for iRow, _ := range singletonTable.mt[index.TableName] {
+		// str := fmt.Sprintf("%v", row.Parsed_Document[index.ColumnName])
+		fmt.Println("Index!! btree!!")
+		sing.btreeIndex[index.TableName][index.ColumnName] = append(sing.btreeIndex[index.TableName][index.ColumnName], singletonTable.mt[index.TableName][iRow])
+	}
+
+	sort.Slice(sing.btreeIndex[index.TableName][index.ColumnName], func(i, j int) bool {
+		first := fmt.Sprintf("%v", sing.btreeIndex[index.TableName][index.ColumnName][i].Parsed_Document[index.ColumnName])
+		second := fmt.Sprintf("%v", sing.btreeIndex[index.TableName][index.ColumnName][j].Parsed_Document[index.ColumnName])
+		iFirst, _ := strconv.Atoi(first)
+		iSecond, _ := strconv.Atoi(second)
+		fmt.Println("Sort!!")
+		return iFirst < iSecond
+	})
+
 }
