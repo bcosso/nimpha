@@ -1320,43 +1320,46 @@ func ManageQueryIndexes(filter Filter, ctx *map[string]interface{}) bool {
 					newFilter := SimplifiedFilter{ColumnName: cTree.Clause, TableName: name, Operator: child.Operation}
 					fmt.Println("FILTER::")
 					fmt.Println(newFilter)
-
-					resultBSearch, found := GetBinaryIndex(intValue, len(singletonIndex.btreeIndex[newFilter.TableName][newFilter.ColumnName]), newFilter)
-					if found {
-
-					}
-					if resultBSearch > -1 {
-						indexInFilter = append(indexInFilter, resultBSearch)
-					} else {
-						return false
-					}
-
-					if len(filtersIndex) > 0 {
-						if filtersIndex[0].ColumnName == cTree.Clause {
-							if resultBSearch < filtersIndex[0].Index && child.Operation == "bigger_than" {
-								// newFilter := SimplifiedFilter{Index: resultBSearch, ColumnName: cTree.Clause}
-								newFilter.Index = resultBSearch
-								filtersIndex = slices.Insert(filtersIndex, 0, newFilter)
-							} else if resultBSearch > filtersIndex[0].Index && child.Operation == "smaller_than" {
-								// newFilter := SimplifiedFilter{Index: resultBSearch, ColumnName: cTree.Clause}
-								newFilter.Index = resultBSearch
-								filtersIndex = append(filtersIndex, newFilter)
-							} else {
-								return false
-							}
-
-							//check if range and sign are bigger or smaller then place it before or after the previous
-
-						} else {
-							return false // Only supporting 1 index per time for now
+					_, existsInIndex := singletonIndex.btreeIndex[filter.TableObject[0].Name][cTree.Clause]
+					if existsInIndex {
+						resultBSearch, found := GetBinaryIndex(intValue, 0, len(singletonIndex.btreeIndex[newFilter.TableName][newFilter.ColumnName]), newFilter)
+						if found {
+							fmt.Println("Found index")
+							fmt.Println(resultBSearch)
 						}
-					} else {
-						newFilter.Index = resultBSearch
-						filtersIndex = append(filtersIndex, newFilter)
-					}
-					// if any of the gates is OR we leave the function
+						if resultBSearch > -1 {
+							indexInFilter = append(indexInFilter, resultBSearch)
+						} else {
+							return false
+						}
 
-					indexAppears++
+						if len(filtersIndex) > 0 {
+							if filtersIndex[0].ColumnName == cTree.Clause {
+								if resultBSearch < filtersIndex[0].Index && child.Operation == "bigger_than" {
+									// newFilter := SimplifiedFilter{Index: resultBSearch, ColumnName: cTree.Clause}
+									newFilter.Index = resultBSearch
+									filtersIndex = slices.Insert(filtersIndex, 0, newFilter)
+								} else if resultBSearch > filtersIndex[0].Index && child.Operation == "smaller_than" {
+									// newFilter := SimplifiedFilter{Index: resultBSearch, ColumnName: cTree.Clause}
+									newFilter.Index = resultBSearch
+									filtersIndex = append(filtersIndex, newFilter)
+								} else {
+									return false
+								}
+
+								//check if range and sign are bigger or smaller then place it before or after the previous
+
+							} else {
+								return false // Only supporting 1 index per time for now
+							}
+						} else {
+							newFilter.Index = resultBSearch
+							filtersIndex = append(filtersIndex, newFilter)
+						}
+						// if any of the gates is OR we leave the function
+
+						indexAppears++
+					}
 
 				}
 
@@ -1381,7 +1384,6 @@ func ManageQueryIndexes(filter Filter, ctx *map[string]interface{}) bool {
 					row := (*singletonIndex.btreeIndex[filtersIndex[0].TableName][filtersIndex[0].ColumnName][counterCondition])
 					newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
 					_query[name] = append(_query[name], newRow)
-
 				}
 
 				return true
@@ -1422,6 +1424,10 @@ func indexCondition(counterCondition *int, filter []SimplifiedFilter) bool {
 		targetIndex = len(singletonIndex.btreeIndex[filter[0].TableName][filter[0].ColumnName]) - 1
 	} else if filter[0].Operator == ">=" {
 		targetIndex = len(singletonIndex.btreeIndex[filter[0].TableName][filter[0].ColumnName]) - 1
+	} else if filter[0].Operator == "equals" {
+		targetIndex = filter[0].Index
+		operation = filter[0].Index
+
 	} else {
 
 		targetIndex = 0
@@ -1438,9 +1444,12 @@ func indexCondition(counterCondition *int, filter []SimplifiedFilter) bool {
 	return true
 }
 
-func GetBinaryIndex(value int, currentIndex int, filter SimplifiedFilter) (int, bool) {
+func GetBinaryIndex(value int, low int, high int, filter SimplifiedFilter) (int, bool) {
 
-	division := currentIndex / 2
+	division := (low + high) / 2
+	// if division >= len(singletonIndex.btreeIndex[filter.TableName][filter.ColumnName]) {
+	// 	division = len(singletonIndex.btreeIndex[filter.TableName][filter.ColumnName]) - 1
+	// }
 	index := *singletonIndex.btreeIndex[filter.TableName][filter.ColumnName][division]
 
 	str := fmt.Sprintf("%v", index.Parsed_Document[filter.ColumnName])
@@ -1473,7 +1482,7 @@ func GetBinaryIndex(value int, currentIndex int, filter SimplifiedFilter) (int, 
 			}
 		}
 
-		return GetBinaryIndex(value, division, filter)
+		return GetBinaryIndex(value, low, division, filter)
 	} else if intValue < value {
 
 		if division < len(singletonIndex.btreeIndex[filter.TableName][filter.ColumnName])-1 {
@@ -1498,7 +1507,7 @@ func GetBinaryIndex(value int, currentIndex int, filter SimplifiedFilter) (int, 
 			}
 		}
 
-		return GetBinaryIndex(value, currentIndex+division, filter)
+		return GetBinaryIndex(value, division, high, filter)
 	} else if intValue == value {
 		return division, true
 	}
