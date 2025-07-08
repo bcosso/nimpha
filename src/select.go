@@ -1419,6 +1419,9 @@ func indexCondition(counterCondition *int, filter []SimplifiedFilter) bool {
 
 	if len(filter) > 1 {
 		targetIndex = filter[1].Index
+		if *counterCondition == 0 {
+			*counterCondition = filter[0].Index - 1
+		}
 
 	} else if filter[0].Operator == "bigger_than" {
 		targetIndex = len(singletonIndex.btreeIndex[filter[0].TableName][filter[0].ColumnName]) - 1
