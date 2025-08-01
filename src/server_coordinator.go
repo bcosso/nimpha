@@ -235,6 +235,8 @@ func handleRequestsRsocket(configs *config) {
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_table", selectTable)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_query", executeQuery)
 
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_equals_rsocket", selectDataWhereWorkerEquals)
+
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_data", insertData)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/read_wal_strategy", readWalStrategyRsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal_new", UpdateWal)

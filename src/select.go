@@ -38,7 +38,53 @@ type mem_table_queries struct {
 	Rows          interface{}
 }
 
-// func select_data_where_worker_equals_rsocket(payload interface{}) interface{} {
+func selectDataWhereWorkerEquals(payload interface{}) interface{} {
+
+	payload_content, ok := payload.(map[string]interface{})
+	if !ok {
+		fmt.Println("ERROR!")
+	}
+
+	table_name := payload_content["table"].(string)
+	where_field := payload_content["where_field"].(string)
+	where_content := payload_content["where_content"].(string)
+
+	// _, existsInIndex := singletonIndex.btreeIndex[filter.TableObject[0].Name][cTree.Clause]
+	// if existsInIndex {
+	// 	resultBSearch, found := GetBinaryIndex(intValue, 0, len(singletonIndex.btreeIndex[newFilter.TableName][newFilter.ColumnName]), newFilter)
+	// 	if found {
+	// 		fmt.Println("Found index")
+	// 		fmt.Println(resultBSearch)
+	// 	}
+	// 	if resultBSearch > -1 {
+	// 		indexInFilter = append(indexInFilter, resultBSearch)
+	// 	} else {
+	// 		return false
+	// 	}
+
+	// var rows_result []mem_row
+	// for _, row := range mt.Rows {
+	// 	if row.Table_name == table_name {
+	// 		if row.Parsed_Document[where_field] == where_content {
+	// 			rows_result = append(rows_result, row)
+	// 		}
+	// 	}
+	// }
+
+	hashIndex, existsInIndex := singletonTable.hashIndex[table_name][where_field]
+	value := fmt.Sprintf("%v", where_content)
+	if existsInIndex {
+		row := *hashIndex[value]
+		newRow := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
+		// _query[table_name] = append(_query[table_name], newRow)
+		return newRow
+
+	}
+
+	return nil
+}
+
+// func select_data_where_worker_between_rsocket(payload interface{}) interface{} {
 
 // 	payload_content, ok := payload.(map[string]interface{})
 // 	if !ok {
@@ -46,8 +92,11 @@ type mem_table_queries struct {
 // 	}
 
 // 	table_name := payload_content["table"].(string)
-// 	where_field := payload_content["where_field"].(string)
-// 	where_content := payload_content["where_content"].(string)
+// 	where_field_from := payload_content["where_field_from"].(string)
+// 	where_content_from := payload_content["where_content_from"].(string)
+
+// 	where_field_to := payload_content["where_field_to"].(string)
+// 	where_content_to := payload_content["where_content_to"].(string)
 
 // 	var rows_result []mem_row
 // 	for _, row := range mt.Rows {
