@@ -70,15 +70,119 @@ func selectDataWhereWorkerEquals(payload interface{}) interface{} {
 	// 		}
 	// 	}
 	// }
+	for _, index := range configs_file.Index[table_name] {
+		if index.IndexType == "HASH" {
 
-	hashIndex, existsInIndex := singletonTable.hashIndex[table_name][where_field]
-	value := fmt.Sprintf("%v", where_content)
-	if existsInIndex {
-		row := *hashIndex[value]
-		newRow := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
-		// _query[table_name] = append(_query[table_name], newRow)
-		return newRow
+			hashIndex, existsInIndex := singletonTable.hashIndex[table_name][where_field]
+			value := fmt.Sprintf("%v", where_content)
+			if existsInIndex {
+				row := *hashIndex[value]
+				newRow := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
+				// _query[table_name] = append(_query[table_name], newRow)
+				return newRow
 
+			}
+		}
+
+		if index.IndexType == "BTREE" {
+			_, existsInIndex := singletonIndex.btreeIndex[table_name][where_field]
+			intValue, _ := strconv.Atoi(where_content)
+			newFilter := SimplifiedFilter{ColumnName: where_field, TableName: table_name, Operator: "equals"}
+			if existsInIndex {
+				resultBSearch, found := GetBinaryIndex(intValue, 0, len(singletonIndex.btreeIndex[table_name][where_field]), newFilter)
+				if found {
+					fmt.Println("Found index")
+					fmt.Println(resultBSearch)
+					row := *singletonIndex.btreeIndex[table_name][where_field][resultBSearch]
+					newRow := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
+					return newRow
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func selectDataWhereWorkerBetween(payload interface{}) interface{} {
+
+	payload_content, ok := payload.(map[string]interface{})
+	if !ok {
+		fmt.Println("ERROR!")
+	}
+
+	table_name := payload_content["table"].(string)
+	where_field_from := payload_content["where_field_from"].(string)
+	where_content_from := payload_content["where_content_from"].(string)
+
+	where_field_to := payload_content["where_field_to"].(string)
+	where_content_to := payload_content["where_content_to"].(string)
+
+	var filtersIndex []SimplifiedFilter
+	var indexInFilter []int
+	// indexAppears := 0
+
+	for _, index := range configs_file.Index[table_name] {
+
+		if index.IndexType == "BTREE" && index.ColumnName == where_field_from && index.ColumnName == where_field_to {
+			intValue, _ := strconv.Atoi(where_content_from)
+
+			newFilter := SimplifiedFilter{ColumnName: where_field_from, TableName: table_name, Operator: "bigger_than"}
+			fmt.Println("FILTER::")
+			fmt.Println(newFilter)
+			_, existsInIndex := singletonIndex.btreeIndex[table_name][where_field_from]
+			if existsInIndex {
+				resultBSearch, found := GetBinaryIndex(intValue, 0, len(singletonIndex.btreeIndex[newFilter.TableName][newFilter.ColumnName]), newFilter)
+				if found {
+					fmt.Println("Found index")
+					fmt.Println(resultBSearch)
+				}
+				if resultBSearch > -1 {
+					indexInFilter = append(indexInFilter, resultBSearch)
+					newFilter.Index = resultBSearch
+					filtersIndex = append(filtersIndex, newFilter)
+
+				} else {
+					return false
+				}
+
+			}
+
+			intValue, _ = strconv.Atoi(where_content_to)
+
+			newFilter = SimplifiedFilter{ColumnName: where_field_to, TableName: table_name, Operator: "smaller_than"}
+			fmt.Println("FILTER::")
+			fmt.Println(newFilter)
+			_, existsInIndex = singletonIndex.btreeIndex[table_name][where_field_to]
+			if existsInIndex {
+				resultBSearch, found := GetBinaryIndex(intValue, 0, len(singletonIndex.btreeIndex[newFilter.TableName][newFilter.ColumnName]), newFilter)
+				if found {
+					fmt.Println("Found index")
+					fmt.Println(resultBSearch)
+				}
+				if resultBSearch > -1 {
+					indexInFilter = append(indexInFilter, resultBSearch)
+					newFilter.Index = resultBSearch
+					filtersIndex = append(filtersIndex, newFilter)
+
+				} else {
+					return false
+				}
+
+			}
+
+			counterCondition := 0
+			var _query []mem_table_queries
+
+			for indexCondition(&counterCondition, filtersIndex) {
+				row := (*singletonIndex.btreeIndex[filtersIndex[0].TableName][filtersIndex[0].ColumnName][counterCondition])
+				newRow := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
+				_query = append(_query, newRow)
+			}
+
+			return _query
+
+		}
 	}
 
 	return nil
