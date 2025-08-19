@@ -8,6 +8,7 @@ import (
 	// "errors"
 	//"io"
 	"encoding/json"
+	"fmt"
 	// "strconv"
 	// "github.com/bcosso/rsocket_json_requests"
 )
@@ -102,6 +103,43 @@ func (sing *SingletonTable) InsertWorker(p mem_row) string {
 	pointerMemRow := &p
 	sing.mu.Lock()
 	sing.mt[p.Table_name] = append(sing.mt[p.Table_name], pointerMemRow)
+	singletonIndex.InsertWorkerIndex(sing.mt[p.Table_name][len(sing.mt[p.Table_name])-1])
 	sing.mu.Unlock()
+	return "Success"
+}
+
+func (sing *SingletonIndex) InsertWorkerIndex(p *mem_row) string {
+	sing.mu.Lock()
+	for _, index := range configs_file.Index[p.Table_name] {
+		if index.IndexType == "HASH" {
+			// 		sing.hashIndex[index.TableName][index.ColumnName][str] = sing.mt[index.TableName][iRow]
+			_, exists := sing.hashIndex[index.TableName][index.ColumnName]
+			if exists {
+				sing.hashIndex[index.TableName][index.ColumnName][(*p).Parsed_Document[index.ColumnName].(string)] = p
+				fmt.Println(sing.hashIndex)
+			}
+
+		} else if index.IndexType == "BTREE" {
+
+			_, exists := sing.btreeIndex[index.TableName][index.ColumnName]
+			if exists {
+
+				sing.btreeIndex[index.TableName][index.ColumnName] = append(sing.btreeIndex[index.TableName][index.ColumnName], p)
+
+				fmt.Println("----------------------------------------------------------------------------------")
+				fmt.Println("Table of Indexes")
+				fmt.Println("----------------------------------------------------------------------------------")
+
+				fmt.Println(sing.btreeIndex)
+			}
+
+			// 		sing.btreeIndex[index.TableName][index.ColumnName] = append(sing.btreeIndex[index.TableName][index.ColumnName], singletonTable.mt[index.TableName][iRow])
+
+		}
+
+	}
+
+	sing.mu.Unlock()
+
 	return "Success"
 }

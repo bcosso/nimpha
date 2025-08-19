@@ -197,6 +197,33 @@ func updateConfiguration(payload interface{}) interface{} {
 		syncSendData(node.Ip)
 		dumpConfig("------------------------------Config File Updated---------------------------------")
 		break
+	case "add_index":
+		nodeInterface, err := GetAttributeFromPayload("index", payload)
+		if err != nil {
+			fmt.Println("*******************")
+			fmt.Println(payload)
+			fmt.Println(err)
+			return "Error"
+		}
+		var tableIndex TableIndex
+		bytesInt, _ := json.Marshal(nodeInterface)
+		json.Unmarshal(bytesInt, &tableIndex)
+		_, exists := configs_file.Index[tableIndex.TableName]
+		if !exists {
+			configs_file.Index = make(map[string][]TableIndex)
+			// configs_file.Index[tableIndex.TableName] = make([]TableIndex, 0)
+		}
+		configs_file.Index[tableIndex.TableName] = append(configs_file.Index[tableIndex.TableName], tableIndex)
+
+		tableIndex.IndexType = strings.ToUpper(tableIndex.IndexType)
+
+		if tableIndex.IndexType == "BTREE" {
+			singletonIndex.AttachNewBTreeIndex(tableIndex)
+		} else if tableIndex.IndexType == "HASH" {
+			singletonIndex.AttachNewHashIndex(tableIndex)
+		}
+		dumpConfig("------------------------------Config File Updated---------------------------------")
+		break
 	default:
 		break
 	}
