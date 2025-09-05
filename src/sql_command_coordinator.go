@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -34,6 +33,9 @@ type SqlClause struct {
 	IsSubquery       bool
 	SelectableObject interface{}
 }
+
+var lastQuery Filter
+var lastQueryString string
 
 // func Exec(query string){
 // 	// str1 := `insert into table1 (field1, field2) values (1, '2') `
@@ -72,7 +74,15 @@ func executeQuery(payload interface{}) interface{} {
 	// fmt.Println("Filter!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	// fmt.Println("-----------------------------------------------------------")
 	// fmt.Println(filterNew)
+	lastQuery = *filterNew2
+	lastQueryString = query
 	result := selectDataWhereWorkerContainsRsocket(*filterNew2, query)
+
+	return result
+}
+
+func executeLastQuery(payload interface{}) interface{} {
+	result := selectDataWhereWorkerContainsRsocket(lastQuery, lastQueryString)
 
 	return result
 }
@@ -385,7 +395,7 @@ func parseFilterConditionsToJson(filter *Filter) string {
 		leafValue := innerFilter.CommandRight.(SqlClause)
 		jsonMap[leafKey.Clause] = leafValue.SelectableObject
 	}
-	resultBytes, _ := json.Marshal(jsonMap)
+	resultBytes, _ := jsonIterGlobal.Marshal(jsonMap)
 	result = string(resultBytes)
 	return result
 }
@@ -405,7 +415,7 @@ func insertFromJson(tableName string, jsonData string, query string, operationTy
 	fmt.Println(jsonStr)
 	jsonMap := make(map[string]interface{})
 
-	err := json.Unmarshal([]byte(jsonStr), &jsonMap)
+	err := jsonIterGlobal.Unmarshal([]byte(jsonStr), &jsonMap)
 	if err != nil {
 		fmt.Println(err)
 	}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -21,7 +20,7 @@ func dump_data(s string) {
 
 func (sing *SingletonTable) dumpMT(s string) {
 	sing.mu.Lock()
-	file, _ := json.MarshalIndent(sing.mt, "", " ")
+	file, _ := jsonIterGlobal.Marshal(sing.mt)
 	_ = ioutil.WriteFile("mem_table.json", file, 0644)
 	sing.mu.Unlock()
 	fmt.Println(s)
@@ -40,7 +39,7 @@ func (sing *SingletonWal) dumpWal(s string) {
 		time.Sleep(wal_interval)
 		sing.mu.Lock()
 		fileName := "wal_file.json"
-		file, _ := json.MarshalIndent(sing.wal, "", " ")
+		file, _ := jsonIterGlobal.Marshal(sing.wal)
 		if wal_limit > 0 && len(file) >= wal_limit {
 			fileName = "wal_file%s.json"
 			fileName = fmt.Sprintf(fileName, time.Now().Format("20060102150405"))
@@ -59,12 +58,12 @@ func (sing *SingletonWal) dumpWal(s string) {
 }
 
 func dumpIT(s string) {
-	file, _ := json.MarshalIndent(it, "", " ")
+	file, _ := jsonIterGlobal.Marshal(it)
 	_ = ioutil.WriteFile("index_table.json", file, 0644)
 }
 
 func dumpConfig(s string) {
-	file, _ := json.MarshalIndent(configs_file, "", " ")
+	file, _ := jsonIterGlobal.Marshal(configs_file)
 	_ = ioutil.WriteFile("configfile.json", file, 0644)
 	fmt.Println(s)
 	//fmt.Println(mt)

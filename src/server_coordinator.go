@@ -14,6 +14,7 @@ import (
 	// "io"
 	"io/ioutil"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"reflect"
 	"sort"
@@ -24,6 +25,7 @@ import (
 	"github.com/bcosso/rsocket_json_requests"
 	"github.com/bcosso/sqlparserproject"
 	"github.com/gorilla/mux"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type config struct {
@@ -145,6 +147,10 @@ type SingletonTable struct {
 var it index_table = getIndexTable()
 var configs_file config
 
+var jsonIterGlobal = jsoniter.Config{
+	EscapeHTML: false,
+}.Froze()
+
 func loadMemTableRsocket(payload interface{}) interface{} {
 	getMemTable()
 	return payload
@@ -190,38 +196,11 @@ func updateConfiguration(payload interface{}) interface{} {
 			return "Error"
 		}
 		var node peers
-		bytesInt, _ := json.Marshal(nodeInterface)
-		json.Unmarshal(bytesInt, &node)
+		bytesInt, _ := jsonIterGlobal.Marshal(nodeInterface)
+		jsonIterGlobal.Unmarshal(bytesInt, &node)
 		configs_file.Peers = append(configs_file.Peers, node)
 		//save config file to disk
 		syncSendData(node.Ip)
-		dumpConfig("------------------------------Config File Updated---------------------------------")
-		break
-	case "add_index":
-		nodeInterface, err := GetAttributeFromPayload("index", payload)
-		if err != nil {
-			fmt.Println("*******************")
-			fmt.Println(payload)
-			fmt.Println(err)
-			return "Error"
-		}
-		var tableIndex TableIndex
-		bytesInt, _ := json.Marshal(nodeInterface)
-		json.Unmarshal(bytesInt, &tableIndex)
-		_, exists := configs_file.Index[tableIndex.TableName]
-		if !exists {
-			configs_file.Index = make(map[string][]TableIndex)
-			// configs_file.Index[tableIndex.TableName] = make([]TableIndex, 0)
-		}
-		configs_file.Index[tableIndex.TableName] = append(configs_file.Index[tableIndex.TableName], tableIndex)
-
-		tableIndex.IndexType = strings.ToUpper(tableIndex.IndexType)
-
-		if tableIndex.IndexType == "BTREE" {
-			singletonIndex.AttachNewBTreeIndex(tableIndex)
-		} else if tableIndex.IndexType == "HASH" {
-			singletonIndex.AttachNewHashIndex(tableIndex)
-		}
 		dumpConfig("------------------------------Config File Updated---------------------------------")
 		break
 	default:
@@ -261,9 +240,8 @@ func handleRequestsRsocket(configs *config) {
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_table", selectTable)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_query", executeQuery)
-
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_procedure", executeLastQuery)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_equals_rsocket", selectDataWhereWorkerEquals)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_between_rsocket", selectDataWhereWorkerBetween)
 
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_data", insertData)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/read_wal_strategy", readWalStrategyRsocket)
@@ -346,6 +324,10 @@ func echo(c net.Conn, shout string, delay time.Duration) {
 
 // Core Methods
 func main() {
+	// debug.SetGCPercent(-1)
+	// go func() {
+	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
+	// }()
 	configfile, err := os.Open("configfile.json")
 	if err != nil {
 		fmt.Println("Error on config file found or config file not existent")
@@ -358,7 +340,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = json.Unmarshal(root, &configs_file)
+	err = jsonIterGlobal.Unmarshal(root, &configs_file)
 	if err != nil {
 		fmt.Println("unmarshal of config file failed")
 		log.Fatal(err)
@@ -403,7 +385,7 @@ func getIndexTable() index_table {
 	root, err := ioutil.ReadAll(configfile)
 	var _it index_table
 	_it.Index_rows = make([]index_row, 0)
-	if err := json.Unmarshal([]byte(string(root)), &_it); err != nil {
+	if err := jsonIterGlobal.Unmarshal([]byte(string(root)), &_it); err != nil {
 		fmt.Println("Index Table Unmarshal")
 		log.Fatal(err)
 	}
@@ -430,7 +412,7 @@ func GetParsedDocumentToMemRow(payload interface{}) (mem_row, interface{}) {
 	var myString string
 	if reflect.TypeOf(myString) == reflect.TypeOf(payload) {
 		myString = payload.(string)
-		json.Unmarshal([]byte(myString), &payload_content)
+		jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 	} else if reflect.TypeOf(payload_content) == reflect.TypeOf(payload) {
 		payload_content = payload.(map[string]interface{})
 	}
@@ -446,31 +428,31 @@ func GetParsedDocumentToMemRow(payload interface{}) (mem_row, interface{}) {
 	if reflect.TypeOf(myString) == reflect.TypeOf(intermediate_inteface) {
 
 		ii = []byte(intermediate_inteface.(string))
-		err := json.Unmarshal(ii, &p)
+		err := jsonIterGlobal.Unmarshal(ii, &p)
 		if err != nil {
 			fmt.Println(err)
 		}
 
 	} else if reflect.TypeOf(payload_content) == reflect.TypeOf(intermediate_inteface) {
 		var p_result mem_row
-		json_rows_bytes, err1 := json.Marshal(intermediate_inteface.(map[string]interface{}))
+		json_rows_bytes, err1 := jsonIterGlobal.Marshal(intermediate_inteface.(map[string]interface{}))
 		if err1 != nil {
 			fmt.Println(err1)
 		}
 
-		err := json.Unmarshal(json_rows_bytes, &p_result)
+		err := jsonIterGlobal.Unmarshal(json_rows_bytes, &p_result)
 		if err != nil {
 			fmt.Println(err)
 		}
 
 		return p_result, intermediate_inteface
 	} else {
-		json_rows_bytes, err1 := json.Marshal(intermediate_inteface.([]interface{}))
+		json_rows_bytes, err1 := jsonIterGlobal.Marshal(intermediate_inteface.([]interface{}))
 		if err1 != nil {
 			fmt.Println(err1)
 		}
 
-		err := json.Unmarshal(json_rows_bytes, &p)
+		err := jsonIterGlobal.Unmarshal(json_rows_bytes, &p)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -485,13 +467,13 @@ func GetInstanceList(payload interface{}) []peers {
 	var myString string
 	if reflect.TypeOf(myString) == reflect.TypeOf(payload) {
 		myString = payload.(string)
-		json.Unmarshal([]byte(myString), &payload_content)
+		jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 	} else if reflect.TypeOf(payload_content) == reflect.TypeOf(payload) {
 		payload_content = payload.(map[string]interface{})
 	}
 
 	intermediate_inteface := payload_content["instance_list"]
-	json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+	json_rows_bytes, _ := jsonIterGlobal.Marshal(intermediate_inteface)
 
 	fmt.Println(intermediate_inteface)
 	reader := bytes.NewReader(json_rows_bytes)
@@ -521,7 +503,7 @@ func GetAttributeFromPayload(attribute string, payload interface{}) (interface{}
 	var myString string
 	if reflect.TypeOf(myString) == reflect.TypeOf(payload) {
 		myString = payload.(string)
-		json.Unmarshal([]byte(myString), &payload_content)
+		jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 	} else if reflect.TypeOf(payload_content) == reflect.TypeOf(payload) {
 		payload_content = payload.(map[string]interface{})
 	} else {
@@ -628,8 +610,8 @@ func InitTypes() {
 
 func ConvertTypes(object interface{}, name string) interface{} {
 	newValue := makeInstance(name)
-	jsonFilter, _ := json.Marshal(&object)
-	err1 := json.Unmarshal([]byte(string(jsonFilter)), &newValue)
+	jsonFilter, _ := jsonIterGlobal.Marshal(&object)
+	err1 := jsonIterGlobal.Unmarshal([]byte(string(jsonFilter)), &newValue)
 	if err1 != nil {
 		panic(err1)
 	}
@@ -644,7 +626,7 @@ var singletonIndex SingletonIndex
 func (sing *SingletonWal) UnmarshalWAL(fileData []byte) {
 	sing.mu.Lock()
 	defer sing.mu.Unlock()
-	err := json.Unmarshal(fileData, &(sing.wal))
+	err := jsonIterGlobal.Unmarshal(fileData, &(sing.wal))
 
 	if err != nil {
 		fmt.Println("Mutex Wal unmarshal")
@@ -657,7 +639,7 @@ func (sing *SingletonWal) UnmarshalWAL(fileData []byte) {
 func (sing *SingletonTable) UnmarshalMT(fileData []byte) {
 	sing.mu.Lock()
 	defer sing.mu.Unlock()
-	err := json.Unmarshal(fileData, &(sing.mt))
+	err := jsonIterGlobal.Unmarshal(fileData, &(sing.mt))
 
 	if err != nil {
 		fmt.Println("Mutex MT unmarshal")

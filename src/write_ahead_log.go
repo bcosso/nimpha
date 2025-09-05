@@ -33,7 +33,7 @@ func getWalDisk() {
 		fmt.Println(err)
 	}
 
-	// err = json.Unmarshal([]byte(root), &wal)
+	// err = jsonIterGlobal.Unmarshal([]byte(root), &wal)
 
 	// if err != nil {
 	// 	fmt.Println("Wal unmarshal")
@@ -49,11 +49,11 @@ func readWalRsocket(payload interface{}) interface{} {
 
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
-	json.Unmarshal([]byte(myString), &payload_content)
+	jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 
 	//payload_content, _ :=  payload.(map[string] interface{})
 	intermediate_inteface := payload_content["body"].(string)
-	json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+	json_rows_bytes, _ := jsonIterGlobal.Marshal(intermediate_inteface)
 	reader := bytes.NewReader(json_rows_bytes)
 	dec := json.NewDecoder(reader)
 	dec.DisallowUnknownFields()
@@ -102,7 +102,7 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 
 	// index_row := it.Index_rows[it.Index_WAL]
 
-	json_data, err := json.Marshal(data_post)
+	json_data, err := jsonIterGlobal.Marshal(data_post)
 
 	if err != nil {
 		log.Fatal(err)
@@ -115,7 +115,7 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 		"operation_type": operation,
 	}
 
-	jsonParam, _ := json.Marshal(param)
+	jsonParam, _ := jsonIterGlobal.Marshal(param)
 	fmt.Println(string(jsonParam))
 	if err != nil {
 		log.Fatal(err)
@@ -154,7 +154,7 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 	var myString string
 	if reflect.TypeOf(myString) == reflect.TypeOf(payload) {
 		myString = payload.(string)
-		json.Unmarshal([]byte(myString), &fullPayload)
+		jsonIterGlobal.Unmarshal([]byte(myString), &fullPayload)
 	} else if reflect.TypeOf(fullPayload) == reflect.TypeOf(payload) {
 		fullPayload = payload.(map[string]interface{})
 	}
@@ -182,7 +182,7 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 	"guid":"%s"
 	}
 	`
-	jsonList, _ := json.Marshal(replicationPoints)
+	jsonList, _ := jsonIterGlobal.Marshal(replicationPoints)
 	jsonStr = fmt.Sprintf(jsonStr, intermediate_inteface, string(jsonList), query, operation, guid)
 
 	// fmt.Println("::::::::::::::::::::")
@@ -216,7 +216,7 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 	"guid":"%s"
 	}
 	`
-	jsonSuccesfulNodes, _ := json.Marshal(successfulNodes)
+	jsonSuccesfulNodes, _ := jsonIterGlobal.Marshal(successfulNodes)
 	jsonStr = fmt.Sprintf(jsonStr, string(jsonSuccesfulNodes), guid)
 
 	for _, node := range successfulNodes {
@@ -341,7 +341,7 @@ func UpdateWal(payload interface{}) interface{} {
 	}
 	// wal[guid] = wo
 	singleton.SetOperationWAL(guid, wo)
-	jsonParam, _ := json.Marshal(param)
+	jsonParam, _ := jsonIterGlobal.Marshal(param)
 
 	//Check if this instance should be updated
 	// if configs_file.Instance_name in  wo.InstancesToUpdate
@@ -457,8 +457,8 @@ func UpdateSuccessfulNodesWal(payload interface{}) interface{} {
 		return "Error"
 	}
 	var nodesSuccessful []peers
-	bytesInt, _ := json.Marshal(nodesInterface)
-	json.Unmarshal(bytesInt, &nodesSuccessful)
+	bytesInt, _ := jsonIterGlobal.Marshal(nodesInterface)
+	jsonIterGlobal.Unmarshal(bytesInt, &nodesSuccessful)
 	guidInterface, err := GetAttributeFromPayload("guid", payload)
 	if err != nil {
 		fmt.Println("*******************")
@@ -522,8 +522,8 @@ func UpdateWalOnly(payload interface{}) interface{} {
 		fmt.Println(err)
 	}
 	var walOperation wal_operation
-	bytesInt, _ := json.Marshal(walOperationInterface)
-	json.Unmarshal(bytesInt, &walOperation)
+	bytesInt, _ := jsonIterGlobal.Marshal(walOperationInterface)
+	jsonIterGlobal.Unmarshal(bytesInt, &walOperation)
 	// wal[guid] = walOperation
 	singleton.SetOperationWAL(guid, walOperation)
 
