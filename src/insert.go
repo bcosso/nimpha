@@ -1,23 +1,17 @@
 package main
 
-import (
-	// "bytes"
-	// "fmt"
-	// "log"
+// "bytes"
+// "fmt"
+// "log"
 
-	// "errors"
-	//"io"
-	"encoding/json"
-	"fmt"
-	// "strconv"
-	// "github.com/bcosso/rsocket_json_requests"
-)
+// "strconv"
+// "github.com/bcosso/rsocket_json_requests"
 
 func insertData(payload interface{}) interface{} {
 
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
-	json.Unmarshal([]byte(myString), &payload_content)
+	jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 
 	// ConsistencyStrategy := ""
 	// _, found := payload_content["connectionConfig"]
@@ -54,7 +48,7 @@ func insertDataJsonBody(payload interface{}) interface{} {
 
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
-	json.Unmarshal([]byte(myString), &payload_content)
+	jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 	query := ""
 	operationType := ""
 
@@ -79,7 +73,7 @@ func insertDataJsonBody(payload interface{}) interface{} {
 	}
 
 	// mapResult := make(map[string]interface{})
-	// err := json.Unmarshal([]byte(payload_content["body"].(string)), &mapResult)
+	// err := jsonIterGlobal.Unmarshal([]byte(payload_content["body"].(string)), &mapResult)
 	// if err != nil {
 	// 	fmt.Println(err)
 	// }
@@ -103,43 +97,6 @@ func (sing *SingletonTable) InsertWorker(p mem_row) string {
 	pointerMemRow := &p
 	sing.mu.Lock()
 	sing.mt[p.Table_name] = append(sing.mt[p.Table_name], pointerMemRow)
-	singletonIndex.InsertWorkerIndex(sing.mt[p.Table_name][len(sing.mt[p.Table_name])-1])
 	sing.mu.Unlock()
-	return "Success"
-}
-
-func (sing *SingletonIndex) InsertWorkerIndex(p *mem_row) string {
-	sing.mu.Lock()
-	for _, index := range configs_file.Index[p.Table_name] {
-		if index.IndexType == "HASH" {
-			// 		sing.hashIndex[index.TableName][index.ColumnName][str] = sing.mt[index.TableName][iRow]
-			_, exists := sing.hashIndex[index.TableName][index.ColumnName]
-			if exists {
-				sing.hashIndex[index.TableName][index.ColumnName][(*p).Parsed_Document[index.ColumnName].(string)] = p
-				fmt.Println(sing.hashIndex)
-			}
-
-		} else if index.IndexType == "BTREE" {
-
-			_, exists := sing.btreeIndex[index.TableName][index.ColumnName]
-			if exists {
-
-				sing.btreeIndex[index.TableName][index.ColumnName] = append(sing.btreeIndex[index.TableName][index.ColumnName], p)
-
-				fmt.Println("----------------------------------------------------------------------------------")
-				fmt.Println("Table of Indexes")
-				fmt.Println("----------------------------------------------------------------------------------")
-
-				fmt.Println(sing.btreeIndex)
-			}
-
-			// 		sing.btreeIndex[index.TableName][index.ColumnName] = append(sing.btreeIndex[index.TableName][index.ColumnName], singletonTable.mt[index.TableName][iRow])
-
-		}
-
-	}
-
-	sing.mu.Unlock()
-
 	return "Success"
 }

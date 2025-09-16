@@ -1,11 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bcosso/sqlparserproject"
 )
@@ -35,6 +35,9 @@ type SqlClause struct {
 	SelectableObject interface{}
 }
 
+var lastQuery Filter
+var lastQueryString string
+
 // func Exec(query string){
 // 	// str1 := `insert into table1 (field1, field2) values (1, '2') `
 // 	// str1 := `select  table1.campo1, table2.campo2 from table1, table2 where t1 = 'TEST STRING' and table1.productid = table2.productid `
@@ -45,7 +48,7 @@ type SqlClause struct {
 // }
 
 func executeQuery(payload interface{}) interface{} {
-
+	oldTIme := time.Now()
 	payload_content, ok := payload.(map[string]interface{})
 	if !ok {
 		fmt.Println("ERROR!")
@@ -72,8 +75,17 @@ func executeQuery(payload interface{}) interface{} {
 	// fmt.Println("Filter!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	// fmt.Println("-----------------------------------------------------------")
 	// fmt.Println(filterNew)
+	lastQuery = *filterNew2
+	lastQueryString = query
 	result := selectDataWhereWorkerContainsRsocket(*filterNew2, query)
+	fmt.Println(time.Now().Sub(oldTIme))
+	return result
+}
 
+func executeLastQuery(payload interface{}) interface{} {
+	oldTIme := time.Now()
+	result := selectDataWhereWorkerContainsRsocket(lastQuery, lastQueryString)
+	fmt.Println(time.Now().Sub(oldTIme))
 	return result
 }
 
@@ -385,7 +397,7 @@ func parseFilterConditionsToJson(filter *Filter) string {
 		leafValue := innerFilter.CommandRight.(SqlClause)
 		jsonMap[leafKey.Clause] = leafValue.SelectableObject
 	}
-	resultBytes, _ := json.Marshal(jsonMap)
+	resultBytes, _ := jsonIterGlobal.Marshal(jsonMap)
 	result = string(resultBytes)
 	return result
 }
@@ -405,7 +417,7 @@ func insertFromJson(tableName string, jsonData string, query string, operationTy
 	fmt.Println(jsonStr)
 	jsonMap := make(map[string]interface{})
 
-	err := json.Unmarshal([]byte(jsonStr), &jsonMap)
+	err := jsonIterGlobal.Unmarshal([]byte(jsonStr), &jsonMap)
 	if err != nil {
 		fmt.Println(err)
 	}
