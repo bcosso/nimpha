@@ -74,7 +74,8 @@ func readWalRsocket(payload interface{}) interface{} {
 		if index_row.Name != configs_file.Instance_name {
 			_port, _ := strconv.Atoi(index_row.Port)
 			rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
-			response, err := rsocket_json_requests.RequestJSON("/"+index_row.Name+"/update_wal_new", intermediate_inteface)
+			CheckConnection(index_row)
+			response, err := rsocket_json_requests.RequestJSONNew("/"+index_row.Name+"/update_wal_new", intermediate_inteface, index_row.Name)
 			if err != nil {
 				fmt.Println("err::::::")
 				fmt.Println(err)
@@ -128,7 +129,8 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 		index_row := configs_file.Peers[indexWal]
 		_port, _ := strconv.Atoi(index_row.Port)
 		rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
-		_, err = rsocket_json_requests.RequestJSON("/"+index_row.Name+"/read_wal_strategy", string(jsonParam))
+		CheckConnection(index_row)
+		_, err = rsocket_json_requests.RequestJSONNew("/"+index_row.Name+"/read_wal_strategy", string(jsonParam), index_row.Name)
 
 		if err != nil {
 			if counter > len(configs_file.Peers) {
@@ -196,7 +198,8 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 		// wg.Add(1)
 		_port, _ := strconv.Atoi(successfulNode.Port)
 		rsocket_json_requests.RequestConfigs(successfulNode.Ip, _port)
-		_, err := rsocket_json_requests.RequestJSON("/"+successfulNode.Name+"/update_wal_new", jsonStr)
+		CheckConnection(successfulNode)
+		_, err := rsocket_json_requests.RequestJSONNew("/"+successfulNode.Name+"/update_wal_new", jsonStr, successfulNode.Name)
 
 		if err != nil {
 			fmt.Println("err::::::update_wal_new")
@@ -222,7 +225,8 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 	for _, node := range successfulNodes {
 		_port, _ := strconv.Atoi(node.Port)
 		rsocket_json_requests.RequestConfigs(node.Ip, _port)
-		_, err := rsocket_json_requests.RequestJSON("/"+node.Name+"/update_successful_nodes_wal", string(jsonStr))
+		CheckConnection(node)
+		_, err := rsocket_json_requests.RequestJSONNew("/"+node.Name+"/update_successful_nodes_wal", string(jsonStr), node.Name)
 		if err != nil {
 			fmt.Println("err::::::update_successful_nodes_wal")
 			fmt.Println(node.Port)
@@ -236,7 +240,8 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 	if hadError {
 		_port, _ := strconv.Atoi(replicationPoints[successfulRow].Port)
 		rsocket_json_requests.RequestConfigs(replicationPoints[successfulRow].Ip, _port)
-		_, err := rsocket_json_requests.RequestJSON("/"+replicationPoints[successfulRow].Name+"/trigger_recover_data_nodes", "")
+		CheckConnection(replicationPoints[successfulRow])
+		_, err := rsocket_json_requests.RequestJSONNew("/"+replicationPoints[successfulRow].Name+"/trigger_recover_data_nodes", "", replicationPoints[successfulRow].Name)
 		if err != nil {
 			fmt.Println("err::::::trigger_recover_data_nodes")
 			fmt.Println(replicationPoints[successfulRow].Port)
@@ -497,7 +502,9 @@ func UpdateWalWholeCluster(guid string, wo wal_operation) {
 			"guid": guid,
 			"body": wo,
 		}
-		_, err := rsocket_json_requests.RequestJSON("/"+peerNode.Name+"/update_wal_only", param)
+
+		CheckConnection(peerNode)
+		_, err := rsocket_json_requests.RequestJSONNew("/"+peerNode.Name+"/update_wal_only", param, peerNode.Name)
 		if err != nil {
 			fmt.Println("err::::::")
 			fmt.Println(err)

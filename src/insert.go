@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 // "bytes"
 // "fmt"
 // "log"
@@ -95,8 +97,21 @@ func insertWorker(payload interface{}) interface{} {
 
 func (sing *SingletonTable) InsertWorker(p mem_row) string {
 	pointerMemRow := &p
+	_, hasIndex := configs_file.Index[p.Table_name]
 	sing.mu.Lock()
 	sing.mt[p.Table_name] = append(sing.mt[p.Table_name], pointerMemRow)
+	if hasIndex {
+		for iIndex, _ := range configs_file.Index[p.Table_name] {
+			str := fmt.Sprintf("%v", p.Parsed_Document[configs_file.Index[p.Table_name][iIndex].ColumnName])
+
+			if configs_file.Index[p.Table_name][iIndex].IndexType == "HASH" {
+				singletonIndex.AttachNewHashIndexUnity(p.Table_name, configs_file.Index[p.Table_name][iIndex].ColumnName, str, pointerMemRow)
+			} else if configs_file.Index[p.Table_name][iIndex].IndexType == "BTREE" {
+				singletonIndex.AttachNewBtreeIndexUnity(p.Table_name, configs_file.Index[p.Table_name][iIndex].ColumnName, str, pointerMemRow)
+			}
+		}
+	}
+
 	sing.mu.Unlock()
 	return "Success"
 }

@@ -73,7 +73,7 @@ func selectDataWhereWorkerEquals(payload interface{}) interface{} {
 	// 	}
 	// }
 
-	hashIndex, existsInIndex := singletonTable.hashIndex[table_name][where_field]
+	hashIndex, existsInIndex := singletonIndex.hashIndex[table_name][where_field]
 	value := fmt.Sprintf("%v", where_content)
 	if existsInIndex {
 		row := *hashIndex[value]
@@ -167,7 +167,8 @@ func selectDataRsocket(payload interface{}) interface{} {
 		_port, _ := strconv.Atoi(ir.Port)
 		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
 
-		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		CheckConnection(ir)
+		response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 		if err != nil {
 			fmt.Println(err)
 		} else {
@@ -358,7 +359,8 @@ func GetQueryDataFromShardQuery(peer []peers, query string) []mem_table_queries 
 
 		fmt.Println(jsonMap)
 
-		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		CheckConnection(ir)
+		response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 		if err != nil {
 			fmt.Println(err)
 		} else {
@@ -426,7 +428,8 @@ func GetQueryDataFromShard(peer []peers, tables []SqlClause, logic_filters Filte
 
 		fmt.Println(jsonMap)
 
-		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		CheckConnection(ir)
+		response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 		if err != nil {
 			fmt.Println(err)
 		} else {
@@ -774,8 +777,8 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx *map[string]in
 					url := "/" + ir.Name + "/select_table"
 					_port, _ := strconv.Atoi(ir.Port)
 					rsocket_json_requests.RequestConfigs(ir.Ip, _port)
-
-					response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+					CheckConnection(ir)
+					response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 
 					if err != nil {
 						fmt.Println(err)
@@ -949,7 +952,8 @@ func selectDataRsocket_sql(payload interface{}) interface{} {
 		_port, _ := strconv.Atoi(ir.Port)
 		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
 
-		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		CheckConnection(ir)
+		response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 		if err != nil {
 			fmt.Println(err)
 		} else {
@@ -1325,7 +1329,7 @@ func ManageQueryIndexes(filter Filter, ctx *map[string]interface{}) bool {
 
 					switch side {
 					case 1:
-						hashIndex, existsInIndex := singletonTable.hashIndex[filter.TableObject[0].Name][cTree.Clause]
+						hashIndex, existsInIndex := singletonIndex.hashIndex[filter.TableObject[0].Name][cTree.Clause]
 						value = fmt.Sprintf("%v", leftValue)
 						if existsInIndex {
 							row := *hashIndex[value]
@@ -1336,7 +1340,7 @@ func ManageQueryIndexes(filter Filter, ctx *map[string]interface{}) bool {
 						}
 						break
 					case 2:
-						hashIndex, existsInIndex := singletonTable.hashIndex[filter.TableObject[0].Name][cTree.Clause]
+						hashIndex, existsInIndex := singletonIndex.hashIndex[filter.TableObject[0].Name][cTree.Clause]
 						value = fmt.Sprintf("%v", rightValue)
 						if existsInIndex {
 							row := *hashIndex[value]

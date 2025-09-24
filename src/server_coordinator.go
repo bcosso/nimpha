@@ -139,9 +139,7 @@ type SingletonIndex struct {
 
 type SingletonTable struct {
 	mt map[string][]*mem_row
-	//		       table     column     value
-	hashIndex map[string]map[string]map[string]*mem_row
-	mu        sync.RWMutex
+	mu sync.RWMutex
 }
 
 var it index_table = getIndexTable()
@@ -367,7 +365,7 @@ func main() {
 
 	getWalDisk()
 	getMemTable()
-	singletonTable.AttachAllIndexesToData()
+	// singletonTable.AttachAllIndexesToData()
 	singletonIndex.AttachAllIndexes()
 	go singleton.dumpWal("------------------------------WAL---------------------------------")
 	go dump_data("------------------------------Data---------------------------------")
@@ -638,78 +636,31 @@ func (sing *SingletonWal) UnmarshalWAL(fileData []byte) {
 }
 
 func (sing *SingletonTable) UnmarshalMT(fileData []byte) {
-
 	tempMT := make(map[string][]*mem_row)
-
 	jsonIterGlobal.Unmarshal(fileData, &(tempMT))
-
 	sing.mu.Lock()
-
 	defer sing.mu.Unlock()
 
-	// for iRows, row := range tempMT {
-
-	//  sing.mt[iRows][iMemRow]
-
-	//  for iMemRow, memRow := range row {
-
-	//      pd := make(map[string]interface{}, len((*memRow).Parsed_Document))
-
-	//      for iPd, parsedDocumentItem := range (*memRow).Parsed_Document{
-
-	//          pd[iPd] = parsedDocumentItem
-
-	//      }
-
-	//      (*(*sing.mt[iRows][iMemRow])).Parsed_Document = pd
-
-	//      (*memRow) = append(,  )
-
-	//  }
-
-	// }
-
 	sing.mt = make(map[string][]*mem_row, len(tempMT))
-
 	for table, tempRows := range tempMT {
-
-		// numCols := 15 // Replace with your fixed column count (or compute max from tempRows)
-
-		// If variable per row, compute max: numCols = 0; for _, r := range tempRows { if len(r.Parsed_Document) > numCols { numCols = len(r.Parsed_Document) } }
-
 		newRows := make([]*mem_row, 0, len(tempRows))
-
 		for _, tempRow := range tempRows {
-
-			// Recreate Parsed_Document with preallocated capacity
-
 			newDoc := make(map[string]interface{}, len((*tempRow).Parsed_Document))
-
 			for k, v := range tempRow.Parsed_Document {
-
 				newDoc[k] = v
-
 			}
 
 			newRow := &mem_row{
-
-				Key_id: tempRow.Key_id,
-
-				Table_name: tempRow.Table_name,
-
+				Key_id:          tempRow.Key_id,
+				Table_name:      tempRow.Table_name,
 				Parsed_Document: newDoc,
 			}
 
 			newRows = append(newRows, newRow)
-
-			// Clear tempRow to avoid memory leak (optional, as GC is disabled but good practice)
-
 			tempRow.Parsed_Document = nil
-
 		}
 
 		sing.mt[table] = newRows
-
 	}
 }
 
@@ -781,9 +732,11 @@ func (sing *SingletonWal) TryRecoverData() (bool, []error) {
 							"instance_list":  replicationPoints,
 							"guid":           indexWo,
 						}
+						// rsocket_json_requests.InitConn()
 						// param2 := make(map[string]interface{})
-						// param2[indexWo] = param
-						_, err := rsocket_json_requests.RequestJSON("/"+index_row.Name+"/update_wal_new", param)
+						// param2[indexWo] =
+						CheckConnection(index_row)
+						_, err := rsocket_json_requests.RequestJSONNew("/"+index_row.Name+"/update_wal_new", param, index_row.Name)
 						if err != nil {
 							fmt.Println("err::::::")
 							fmt.Println(err)
@@ -821,37 +774,6 @@ func (sing *SingletonWal) Get(guid string) wal_operation {
 	return sing.wal[guid]
 }
 
-func (sing *SingletonTable) AttachAllIndexesToData() {
-	for _, indexTable := range configs_file.Index {
-		for _, index := range indexTable {
-			sing.AttachNewIndex(index)
-		}
-	}
-}
-
-func (sing *SingletonTable) AttachNewIndex(index TableIndex) {
-	sing.mu.Lock()
-	defer sing.mu.Unlock()
-
-	if sing.hashIndex == nil {
-		sing.hashIndex = make(map[string]map[string]map[string]*mem_row, 10)
-	}
-
-	if _, ok := sing.hashIndex[index.TableName]; !ok {
-		sing.hashIndex[index.TableName] = make(map[string]map[string]*mem_row, 200000)
-	}
-
-	if _, ok := sing.hashIndex[index.TableName][index.ColumnName]; !ok {
-		sing.hashIndex[index.TableName][index.ColumnName] = make(map[string]*mem_row, 200000)
-	}
-
-	for iRow, row := range sing.mt[index.TableName] {
-		str := fmt.Sprintf("%v", row.Parsed_Document[index.ColumnName])
-		fmt.Println("Index!!")
-		sing.hashIndex[index.TableName][index.ColumnName][str] = sing.mt[index.TableName][iRow]
-	}
-}
-
 func (sing *SingletonIndex) AttachAllIndexes() {
 	for _, indexTable := range configs_file.Index {
 		for _, index := range indexTable {
@@ -865,26 +787,33 @@ func (sing *SingletonIndex) AttachAllIndexes() {
 	}
 }
 
+func CheckConnection(peer peers) {
+	if !rsocket_json_requests.GetStatusConn(peer.Name) {
+		port, _ := strconv.Atoi(peer.Port)
+		rsocket_json_requests.InitConn(peer.Name, peer.Ip, port)
+	}
+}
+
 func (sing *SingletonIndex) AttachNewHashIndex(index TableIndex) {
 	sing.mu.Lock()
 	defer sing.mu.Unlock()
 
 	if sing.hashIndex == nil {
-		sing.hashIndex = make(map[string]map[string]map[string]*mem_row)
+		sing.hashIndex = make(map[string]map[string]map[string]*mem_row) //, 10)
 	}
 
 	if _, ok := sing.hashIndex[index.TableName]; !ok {
-		sing.hashIndex[index.TableName] = make(map[string]map[string]*mem_row)
+		sing.hashIndex[index.TableName] = make(map[string]map[string]*mem_row) //, 200000)
 	}
 
 	if _, ok := sing.hashIndex[index.TableName][index.ColumnName]; !ok {
-		sing.hashIndex[index.TableName][index.ColumnName] = make(map[string]*mem_row)
+		sing.hashIndex[index.TableName][index.ColumnName] = make(map[string]*mem_row) //, 200000)
 	}
 
-	for iRow, row := range sing.mt[index.TableName] {
+	for iRow, row := range singletonTable.mt[index.TableName] {
 		str := fmt.Sprintf("%v", row.Parsed_Document[index.ColumnName])
 		fmt.Println("Index!!")
-		sing.hashIndex[index.TableName][index.ColumnName][str] = sing.mt[index.TableName][iRow]
+		sing.hashIndex[index.TableName][index.ColumnName][str] = singletonTable.mt[index.TableName][iRow]
 	}
 }
 
@@ -915,4 +844,16 @@ func (sing *SingletonIndex) AttachNewBTreeIndex(index TableIndex) {
 		return iFirst < iSecond
 	})
 
+}
+
+func (sing *SingletonIndex) AttachNewHashIndexUnity(tableName string, columnName string, value string, row *mem_row) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	sing.hashIndex[tableName][columnName][value] = row
+}
+
+func (sing *SingletonIndex) AttachNewBtreeIndexUnity(tableName string, columnName string, value string, row *mem_row) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	sing.btreeIndex[tableName][columnName] = append(sing.btreeIndex[tableName][columnName], row)
 }
