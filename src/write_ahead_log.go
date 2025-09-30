@@ -124,14 +124,23 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 
 	counter := 0
 
+	fmt.Println("---------------------------------------------------------------")
+	fmt.Println("gOT INTO GetNextNodesToInsertAndWriteWal")
+	fmt.Println("---------------------------------------------------------------")
+
 	for true {
 		counter++
 		index_row := configs_file.Peers[indexWal]
 		_port, _ := strconv.Atoi(index_row.Port)
 		rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
 		CheckConnection(index_row)
+		fmt.Println("---------------------------------------------------------------")
+		fmt.Println(index_row.Name)
+		fmt.Println("---------------------------------------------------------------")
 		_, err = rsocket_json_requests.RequestJSONNew("/"+index_row.Name+"/read_wal_strategy", string(jsonParam), index_row.Name)
-
+		fmt.Println("---------------------------------------------------------------")
+		fmt.Println(index_row.Name)
+		fmt.Println("---------------------------------------------------------------")
 		if err != nil {
 			if counter > len(configs_file.Peers) {
 				fmt.Println("No nodes available as WAL (Write Ahead Log)")
@@ -142,8 +151,14 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 			} else {
 				indexWal = 0
 			}
+			fmt.Println("---------------------------------------------------------------")
+			fmt.Println("err")
+			fmt.Println("---------------------------------------------------------------")
 			fmt.Println("err::::::")
 		} else {
+			fmt.Println("---------------------------------------------------------------")
+			fmt.Println("Done")
+			fmt.Println("---------------------------------------------------------------")
 			break
 		}
 	}

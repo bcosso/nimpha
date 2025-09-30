@@ -349,7 +349,7 @@ func GetQueryDataFromShardQuery(peer []peers, query string) []mem_table_queries 
 		jsonMap := make(map[string]interface{})
 		errMap := jsonIterGlobal.Unmarshal([]byte(jsonStr1), &jsonMap)
 		if errMap != nil {
-			fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&ERROR")
+			fmt.Println("ERROR")
 			fmt.Println(errMap)
 
 		}
@@ -538,6 +538,7 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 			fmt.Println("The Tables")
 			fmt.Println(tables)
 			fmt.Println("----------------------------------------------------------------------------------")
+			fmt.Println((*ctx)["_query"])
 
 			if len(tables) > 0 {
 				for _, table := range tables {
@@ -632,9 +633,7 @@ func GetTableSummarize(tables []string, filter Filter, selectObject []SqlClause,
 				for _, column := range selectObject {
 					if !checkSelectStar(column, &columns, _query[table][index]) {
 						columnResult := ProjectColumns(_query[table][index], column, ctx)
-						fmt.Println("----------------------------------------------------------------------------------")
-						fmt.Println("Not Star")
-						fmt.Println(columnResult)
+
 						if column.Alias != "" {
 							columnResult.Alias = column.Alias
 						} // columnResult.Name = column.Name
@@ -662,6 +661,13 @@ func GetTableSummarize(tables []string, filter Filter, selectObject []SqlClause,
 
 func CheckColumnExistance(row mem_table_queries, clause sqlparserproject.CommandTree) (interface{}, bool) {
 	rowColumn := row.Rows.(map[string]interface{})
+	for _, rel := range row.Relationships {
+		if rel.TableNameRight == clause.Prefix {
+			rowColumn = (*(rel.RelatedRow)).Rows.(map[string]interface{})
+			break
+		}
+	}
+
 	actualValue, found := rowColumn[clause.Clause]
 	if found == false {
 		for _, relationship := range row.Relationships {
@@ -685,7 +691,7 @@ func ProjectColumns(row mem_table_queries, column SqlClause, ctx *map[string]int
 	var columnManSqlClause SqlClause
 	if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation) {
 		fmt.Println("*****************************************")
-		fmt.Println("Found type of the column - CommandTree")
+		fmt.Println("Found type of the column")
 		clause := column.SelectableObject.(sqlparserproject.CommandTree)
 		// columns[clause.Clause] = make(map[string]interface{})
 		rowColumn, found := CheckColumnExistance(row, clause)
@@ -739,12 +745,12 @@ func checkSelectStar(columnResult SqlClause, columns *map[string]interface{}, ro
 func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx *map[string]interface{}) {
 
 	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
-	_indexFilter := (*ctx)["_indexFilter"].(int)
+	// _indexFilter := (*ctx)["_indexFilter"].(int)
 
-	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	fmt.Println("IndexFilter")
-	fmt.Println(_indexFilter)
-	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	// fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	// fmt.Println("IndexFilter")
+	// fmt.Println(_indexFilter)
+	// fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
 	for _, table := range tables {
 		//Search in nodes
@@ -1245,12 +1251,17 @@ func (sing *SingletonTable) SelectTable(table_name string, alias string) []mem_t
 	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	var rows_result []mem_table_queries
 	for _, row := range sing.mt[table_name] {
+
+		fmt.Println("table_name: " + table_name)
+		fmt.Println("row.Table_name: " + row.Table_name)
+		fmt.Println(table_name == row.Table_name)
+
 		if row.Table_name == table_name {
 
-			if alias != "" {
-				table_name = alias
+			if alias == "" {
+				alias = table_name
 			}
-			rowMemQuery := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
+			rowMemQuery := mem_table_queries{TableName: alias, Rows: row.Parsed_Document}
 			rows_result = append(rows_result, rowMemQuery)
 		}
 	}

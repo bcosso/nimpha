@@ -788,10 +788,20 @@ func (sing *SingletonIndex) AttachAllIndexes() {
 }
 
 func CheckConnection(peer peers) {
+
 	if !rsocket_json_requests.GetStatusConn(peer.Name) {
+		fmt.Println("---------------------------------------------------------------")
+		fmt.Println("Not connected")
+		fmt.Println("---------------------------------------------------------------")
 		port, _ := strconv.Atoi(peer.Port)
 		rsocket_json_requests.InitConn(peer.Name, peer.Ip, port)
+
 	}
+
+	fmt.Println("---------------------------------------------------------------")
+	fmt.Println("Connected!!")
+	fmt.Println(peer)
+	fmt.Println("---------------------------------------------------------------")
 }
 
 func (sing *SingletonIndex) AttachNewHashIndex(index TableIndex) {

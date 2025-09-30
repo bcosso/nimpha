@@ -413,7 +413,9 @@ func insertFromJson(tableName string, jsonData string, query string, operationTy
 	}
 	`
 	jsonStr = fmt.Sprintf(jsonStr, tableName, jsonData, query, operationType)
-
+	fmt.Println("---------------------------------------------------------------")
+	fmt.Println("gOT INTO insertFromJson")
+	fmt.Println("---------------------------------------------------------------")
 	fmt.Println(jsonStr)
 	jsonMap := make(map[string]interface{})
 

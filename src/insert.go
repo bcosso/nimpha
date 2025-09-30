@@ -83,6 +83,10 @@ func insertDataJsonBody(payload interface{}) interface{} {
 	intermediate_inteface := payload_content["body"].(map[string]interface{})
 	result.Parsed_Document = intermediate_inteface
 	coll = append(coll, result)
+
+	fmt.Println("---------------------------------------------------------------")
+	fmt.Println("gOT INTO insertDataJsonBody")
+	fmt.Println("---------------------------------------------------------------")
 	GetNextNodesToInsertAndWriteWal(&coll, query, operationType)
 
 	return "ok"
