@@ -168,13 +168,19 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 				fmt.Println("Got in Sharding Type = Table")
 				fmt.Println("----------------------------------------------------------------------------------")
 				peer, tablesOutOfHash := GetShardingForTables(ParseSqlClauseToStringTables(tableObject))
-				if len(tablesOutOfHash) < 1 && checkIfImInPeers(peer) == false {
+				if len(tablesOutOfHash) > 0 && checkIfImInPeers(peer) == false {
 					ctx := make(map[string]interface{})
 					ctx["_query_sql"] = query
 					singletonTable.DeleteWorker(filter, &ctx)
 					break
-				} else {
-					//Querying tables out of shard
+				} else if len(tablesOutOfHash) < 1 {
+					//Execute on shard node
+				} else if checkIfImInPeers(peer) {
+					ctx := make(map[string]interface{})
+					ctx["_query_sql"] = query
+
+					singletonTable.DeleteWorker(filter, &ctx)
+					break
 				}
 			} else {
 				if caller == "wal" {
