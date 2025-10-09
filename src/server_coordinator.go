@@ -323,9 +323,9 @@ func echo(c net.Conn, shout string, delay time.Duration) {
 // Core Methods
 func main() {
 	// debug.SetGCPercent(-1)
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+	// go func() {
+	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
+	// }()
 	configfile, err := os.Open("configfile.json")
 	if err != nil {
 		fmt.Println("Error on config file found or config file not existent")

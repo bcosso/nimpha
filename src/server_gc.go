@@ -13,7 +13,7 @@ var wal_limit int = 0
 func dump_data(s string) {
 	for true {
 		time.Sleep(data_interval)
-		dumpIT(s)
+		// dumpIT(s)
 		singletonTable.dumpMT(s)
 	}
 }
