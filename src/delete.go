@@ -110,7 +110,7 @@ func (sing *SingletonIndex) DeleteWorkerIndex(tableName string, row map[string]i
 						fmt.Println("Found to delete Index")
 						fmt.Println("----------------------------------------------------------------------------------")
 
-						slices.Delete(singletonIndex.btreeIndex[tableName][k], i, i+1)
+						singletonIndex.btreeIndex[tableName][k] = slices.Delete(singletonIndex.btreeIndex[tableName][k], i, i+1)
 					}
 				}
 			}

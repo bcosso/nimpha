@@ -1449,6 +1449,9 @@ func ManageQueryIndexes(filter Filter, ctx *map[string]interface{}) bool {
 				}
 
 				for indexCondition(&counterCondition, filtersIndex) {
+					fmt.Println("-------------counterCondition--------------------")
+					fmt.Println(counterCondition)
+					fmt.Println("-------------------------------------------------")
 					row := (*singletonIndex.btreeIndex[filtersIndex[0].TableName][filtersIndex[0].ColumnName][counterCondition])
 					newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
 					_query[name] = append(_query[name], newRow)
