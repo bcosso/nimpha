@@ -991,7 +991,10 @@ func evaluateLogic(current_row mem_table_queries, logicObject2 *Filter, ctx *map
 	previousGate := ""
 	var treeReference sqlparserproject.CommandTree
 	logicObject := *logicObject2
-	_analyzedFilterList := (*ctx)["_analyzedFilterList"].(map[string]int)
+	var _analyzedFilterList map[string]int
+	if resultFilterList, found := (*ctx)["_analyzedFilterList"]; found {
+		_analyzedFilterList = resultFilterList.(map[string]int)
+	}
 
 	for _, filter := range logicObject.ChildFilters {
 

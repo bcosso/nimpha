@@ -116,7 +116,7 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 		"operation_type": operation,
 	}
 
-	jsonParam, _ := jsonIterGlobal.Marshal(param)
+	jsonParam, err := jsonIterGlobal.Marshal(param)
 	fmt.Println(string(jsonParam))
 	if err != nil {
 		log.Fatal(err)
@@ -134,7 +134,8 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 		_port, _ := strconv.Atoi(index_row.Port)
 		rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
 		CheckConnection(index_row)
-		fmt.Println("---------------------------------------------------------------")
+		fmt.Println(counter)
+		fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 		fmt.Println(index_row.Name)
 		fmt.Println("---------------------------------------------------------------")
 		_, err = rsocket_json_requests.RequestJSONNew("/"+index_row.Name+"/read_wal_strategy", string(jsonParam), index_row.Name)

@@ -58,23 +58,10 @@ func executeQuery(payload interface{}) interface{} {
 	// var action sqlparserproject.ActionExec = ParsingActionExec{}
 	// sqlparserproject.SetAction(action)
 	tree := sqlparserproject.ExecuteParsingProcess(query)
-	// filterNew := new(Filter)
 	filterNew2 := new(Filter)
-
-	// result := determineQueryType(tree, filterNew2, query)
 
 	determineQueryType(tree, filterNew2, query, "")
 
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println("determineQueryType!!!!!!!!!!!!!!!!!")
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println(filterNew2)
-
-	// readThroughSyntaxTree(tree, "", filterNew)
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println("Filter!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-	// fmt.Println("-----------------------------------------------------------")
-	// fmt.Println(filterNew)
 	lastQuery = *filterNew2
 	lastQueryString = query
 	result := selectDataWhereWorkerContainsRsocket(*filterNew2, query)
@@ -90,11 +77,8 @@ func executeLastQuery(payload interface{}) interface{} {
 }
 
 func executeQueryDelete(query string) interface{} {
-	// var action sqlparserproject.ActionExec = ParsingActionExec{}
-	// sqlparserproject.SetAction(action)
 	tree := sqlparserproject.ExecuteParsingProcess(query)
 	filterNew := new(Filter)
-	// result := determineQueryType(tree, filterNew2, query)
 	determineQueryType(tree, filterNew, query, "wal")
 
 	return "Ok"
@@ -102,41 +86,18 @@ func executeQueryDelete(query string) interface{} {
 
 func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query string, caller string) interface{} {
 	var filterNew *Filter
-
-	// typeToken := strings.ToLower(clause.TypeToken)
 	for indexLeaf, leaf := range tree.CommandParts {
-		// fmt.Println("-----------------------------------------------------------")
-		// fmt.Println("Command Parts")
-		// fmt.Println(strings.ToLower(leaf.TypeToken))
-		// fmt.Println("-----------------------------------------------------------")
-
 		switch strings.ToLower(leaf.TypeToken) {
 		case "select":
 			fallthrough
 		case "fields_select":
 			fallthrough
 		case "tables_from":
-			// determineQueryType(leaf, filter, query)
-			// filterNew := new(Filter)
 			readThroughSyntaxTree(tree, "", filter)
-
-			fmt.Println("-----------------------------------------------------------")
-			fmt.Println("HERE")
-			fmt.Println("-----------------------------------------------------------")
-			fmt.Println(filter)
-
-			// result := select_data_where_worker_contains_rsocket_sql(*filterNew, query)
-
-			// return result
 			return nil
 
-			// break
-
 		case "where_fields":
-
 			determineQueryType(leaf, filter, query, "")
-			break
-
 		case "insert":
 			determineQueryType(leaf, filter, query, "")
 			resultParse := parseFilterConditionsToJson(filter)
@@ -146,87 +107,43 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 			fmt.Println(resultParse)
 			tableObject := filter.TableObject[0]
 			insertFromJson(tableObject.Name, resultParse, query, "insert")
-			break
 		case "addressing_insert":
 			determineQueryType(leaf, filter, query, "")
-			break
 		case "delete":
 			determineQueryType(leaf, filter, query, "")
 			tableObject := filter.TableObject
 
-			// TODO
-			// Get the Sharding strategy. After that send to the correspondent nodes via select_data_where_worker_contains_rsocket_sql with the filters
-			// and fill tableResult. If data is retrieved from other nodes, and the sharding strategy is TABLE check tables that were used already (remove from tables list)
-			//
-			fmt.Println("----------------------------------------------------------------------------------")
-			fmt.Println("BEFORE Sharding Type = Table")
-			fmt.Println(configs_file)
-			fmt.Println("----------------------------------------------------------------------------------")
-
-			if strings.ToLower(configs_file.Sharding_type) == "table" {
+			if caller == "wal" {
+				ctx := make(map[string]interface{})
+				ctx["_query_sql"] = query
+				ctx["_query"] = query
 				fmt.Println("----------------------------------------------------------------------------------")
-				fmt.Println("Got in Sharding Type = Table")
+				fmt.Println("Got into delete Worker")
 				fmt.Println("----------------------------------------------------------------------------------")
-				peer, tablesOutOfHash := GetShardingForTables(ParseSqlClauseToStringTables(tableObject))
-				if len(tablesOutOfHash) > 0 && checkIfImInPeers(peer) == false {
-					ctx := make(map[string]interface{})
-					ctx["_query_sql"] = query
-					singletonTable.DeleteWorker(filter, &ctx)
-					break
-				} else if len(tablesOutOfHash) < 1 {
-					//Execute on shard node
-				} else if checkIfImInPeers(peer) {
-					ctx := make(map[string]interface{})
-					ctx["_query_sql"] = query
-
-					singletonTable.DeleteWorker(filter, &ctx)
-					break
-				}
+				_analyzedFilterList := make(map[string]int)
+				ctx["_analyzedFilterList"] = _analyzedFilterList
+				singletonTable.DeleteWorker(filter, &ctx)
 			} else {
-				if caller == "wal" {
-					ctx := make(map[string]interface{})
-					ctx["_query_sql"] = query
-					ctx["_query"] = query
-					fmt.Println("----------------------------------------------------------------------------------")
-					fmt.Println("Got into delete Worker")
-					fmt.Println("----------------------------------------------------------------------------------")
-					_analyzedFilterList := make(map[string]int)
-					ctx["_analyzedFilterList"] = _analyzedFilterList
-					singletonTable.DeleteWorker(filter, &ctx)
-					break
-				}
-			}
-			// checkIfImInPeers()
-			resultParse := "{}"
-			fmt.Println("---------------------------------------------------------------")
-			fmt.Println("Parsed Json for insert")
-			fmt.Println("---------------------------------------------------------------")
-			fmt.Println(resultParse)
+				resultParse := "{}"
+				fmt.Println("---------------------------------------------------------------")
+				fmt.Println("Parsed Json for insert")
+				fmt.Println("---------------------------------------------------------------")
+				fmt.Println(resultParse)
 
-			insertFromJson(tableObject[0].Name, resultParse, query, "delete")
-			//return callDeleteFunction(filter, query)
-			break
+				insertFromJson(tableObject[0].Name, resultParse, query, "delete")
+			}
 		case "into_command":
 			determineQueryType(leaf, filter, query, "")
-			//return callDeleteFunction(filter, query)
-			break
-
 		case "update":
 			determineQueryType(leaf, filter, query, "")
-			//return callUpdateFunction(filter, query)
-			break
 		case "set":
 			fallthrough
 		case "into":
 			determineQueryType(leaf, filter, query, "")
-			break
 		case "columns":
 			setColumnsToBeInsertedToFilter(leaf, filter)
-			break
 		case "values_insert":
 			setValuesToBeInsertedToFilter(leaf.CommandParts[0], filter)
-			break
-
 		case "table":
 			fallthrough
 		case "from":
@@ -238,13 +155,10 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 			fmt.Println("---------------------------------------------------------------")
 			fmt.Println("Found Table")
 			fmt.Println("---------------------------------------------------------------")
-			break
 		case "column":
 			var newClause SqlClause
 			//HOw do I create it, need to put in a function
 			filter.SelectClause = append(filter.SelectClause, newClause)
-			//filter
-			break
 		// case "where_fields":
 		// 	//call this same function and make the left side of the where a sqlclause?
 		// 	//MAke the operators sqlClauses too and change the whole logic engine? Use the same existing approach as readthrough? Good opportunity
@@ -273,21 +187,7 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 				//flow control in case of UPDATE SET command
 				filterNew = newFilter()
 				filter.ChildFilters = append(filter.ChildFilters, *filterNew)
-
-				// fmt.Println("-----------------------------------------------------------")
-				// fmt.Println("SELECTCLAUSE")
-				// fmt.Println("-----------------------------------------------------------")
-
-				// fmt.Println((*filter).SelectClause)
-				// fmt.Println(indexLeaf)
-				// fmt.Println(tree.CommandParts[indexLeaf-1])
-				// fmt.Println(filterNew)
-				//remove previous SqlClause from Filter
-
 				(*filter).SelectClause = (*filter).SelectClause[0 : len((*filter).SelectClause)-1]
-
-				// filterNew := new(Filter)
-
 				filterNew.CommandLeft = setComparisonFilterValue(tree.CommandParts[indexLeaf-1])
 
 				if indexLeaf < len(tree.CommandParts)-1 {
@@ -300,13 +200,9 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 				}
 
 				filter.ChildFilters = append(filter.ChildFilters, *filterNew)
-
-				break
 			default:
 				break
 			}
-			break
-
 		case "field_select_to_show":
 			fallthrough
 		case "field_filter":
