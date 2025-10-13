@@ -14,8 +14,10 @@ import (
 	// "io"
 	"io/ioutil"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,25 +25,34 @@ import (
 	"github.com/bcosso/rsocket_json_requests"
 	"github.com/bcosso/sqlparserproject"
 	"github.com/gorilla/mux"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type config struct {
-	Folder_Path     string  `json:"path"`
-	Peers           []peers `json:"peers"`
-	Number_Replicas string  `json:"number_replicas"`
-	Max_Heap_Size   string  `json:"max_heap_size"`
-	Instance_ip     string  `json:"instance_ip"`
-	Instance_name   string  `json:"instance_name"`
-	Instance_Port   string  `json:"instance_port"`
-	Sync_Port       string  `json:"sync_port"`
-	Data_Interval   string  `json:"data_interval"`
-	Wal_Interval    string  `json:"wal_interval"`
-	Wal_Limit       string  `json:"wal_limit"`
+	Folder_Path     string                  `json:"path"`
+	Peers           []peers                 `json:"peers"`
+	Number_Replicas string                  `json:"number_replicas"`
+	Max_Heap_Size   string                  `json:"max_heap_size"`
+	Instance_ip     string                  `json:"instance_ip"`
+	Instance_name   string                  `json:"instance_name"`
+	Instance_Port   string                  `json:"instance_port"`
+	Sync_Port       string                  `json:"sync_port"`
+	Data_Interval   string                  `json:"data_interval"`
+	Wal_Interval    string                  `json:"wal_interval"`
+	Wal_Limit       string                  `json:"wal_limit"`
+	Index           map[string][]TableIndex `json:"index_definition"`
 	//RANGE, ALPHABETICAL, TABLE
 	Sharding_type     string                   `json:sharding_type`
 	Sharding_column   string                   `json:sharding_column`
 	Sharding_groups   []ShardGroup             `json:sharding_groups`
 	Sharding_strategy map[string]ShardStrategy `json:sharding_strategy`
+}
+
+type TableIndex struct {
+	TableName  string `json:"table_name"`
+	ColumnName string `json:"column_name"`
+	//HASH, btree
+	IndexType string `json:"index_type"`
 }
 
 type peers struct {
@@ -118,14 +129,26 @@ type SingletonWal struct {
 	mu  sync.RWMutex
 }
 
+type SingletonIndex struct {
+	mt map[string][]*mem_row
+	//		       table     column     value
+	hashIndex  map[string]map[string]map[string]*mem_row
+	btreeIndex map[string]map[string][]*mem_row
+	mu         sync.RWMutex
+}
+
 type SingletonTable struct {
-	mt        map[string][]*mem_row
-	hashIndex map[string]map[string]*mem_row
-	mu        sync.RWMutex
+	mt map[string][]*mem_row
+	mu sync.RWMutex
 }
 
 var it index_table = getIndexTable()
 var configs_file config
+
+var jsonIterGlobal = jsoniter.Config{
+	EscapeHTML: false,
+	UseNumber:  true, // This is the key part!
+}.Froze()
 
 func loadMemTableRsocket(payload interface{}) interface{} {
 	getMemTable()
@@ -172,8 +195,8 @@ func updateConfiguration(payload interface{}) interface{} {
 			return "Error"
 		}
 		var node peers
-		bytesInt, _ := json.Marshal(nodeInterface)
-		json.Unmarshal(bytesInt, &node)
+		bytesInt, _ := jsonIterGlobal.Marshal(nodeInterface)
+		jsonIterGlobal.Unmarshal(bytesInt, &node)
 		configs_file.Peers = append(configs_file.Peers, node)
 		//save config file to disk
 		syncSendData(node.Ip)
@@ -216,13 +239,14 @@ func handleRequestsRsocket(configs *config) {
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_table", selectTable)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_query", executeQuery)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_procedure", executeLastQuery)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_equals_rsocket", selectDataWhereWorkerEquals)
 
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/insert_data", insertData)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/read_wal_strategy", readWalStrategyRsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal_new", UpdateWal)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_successful_nodes_wal", UpdateSuccessfulNodesWal)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/trigger_recover_data_nodes", TriggerRecoverDataInNodes)
-	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/query_data_sharding_rsocket", queryDataShardingRsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/get_server_free_memory", getServerFreeMemory)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/update_wal_only", UpdateWalOnly)
 
@@ -299,6 +323,10 @@ func echo(c net.Conn, shout string, delay time.Duration) {
 
 // Core Methods
 func main() {
+	// debug.SetGCPercent(-1)
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	configfile, err := os.Open("configfile.json")
 	if err != nil {
 		fmt.Println("Error on config file found or config file not existent")
@@ -311,7 +339,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = json.Unmarshal(root, &configs_file)
+	err = jsonIterGlobal.Unmarshal(root, &configs_file)
 	if err != nil {
 		fmt.Println("unmarshal of config file failed")
 		log.Fatal(err)
@@ -338,6 +366,8 @@ func main() {
 
 	getWalDisk()
 	getMemTable()
+	// singletonTable.AttachAllIndexesToData()
+	singletonIndex.AttachAllIndexes()
 	go singleton.dumpWal("------------------------------WAL---------------------------------")
 	go dump_data("------------------------------Data---------------------------------")
 
@@ -354,7 +384,7 @@ func getIndexTable() index_table {
 	root, err := ioutil.ReadAll(configfile)
 	var _it index_table
 	_it.Index_rows = make([]index_row, 0)
-	if err := json.Unmarshal([]byte(string(root)), &_it); err != nil {
+	if err := jsonIterGlobal.Unmarshal([]byte(string(root)), &_it); err != nil {
 		fmt.Println("Index Table Unmarshal")
 		log.Fatal(err)
 	}
@@ -381,7 +411,7 @@ func GetParsedDocumentToMemRow(payload interface{}) (mem_row, interface{}) {
 	var myString string
 	if reflect.TypeOf(myString) == reflect.TypeOf(payload) {
 		myString = payload.(string)
-		json.Unmarshal([]byte(myString), &payload_content)
+		jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 	} else if reflect.TypeOf(payload_content) == reflect.TypeOf(payload) {
 		payload_content = payload.(map[string]interface{})
 	}
@@ -397,31 +427,31 @@ func GetParsedDocumentToMemRow(payload interface{}) (mem_row, interface{}) {
 	if reflect.TypeOf(myString) == reflect.TypeOf(intermediate_inteface) {
 
 		ii = []byte(intermediate_inteface.(string))
-		err := json.Unmarshal(ii, &p)
+		err := jsonIterGlobal.Unmarshal(ii, &p)
 		if err != nil {
 			fmt.Println(err)
 		}
 
 	} else if reflect.TypeOf(payload_content) == reflect.TypeOf(intermediate_inteface) {
 		var p_result mem_row
-		json_rows_bytes, err1 := json.Marshal(intermediate_inteface.(map[string]interface{}))
+		json_rows_bytes, err1 := jsonIterGlobal.Marshal(intermediate_inteface.(map[string]interface{}))
 		if err1 != nil {
 			fmt.Println(err1)
 		}
 
-		err := json.Unmarshal(json_rows_bytes, &p_result)
+		err := jsonIterGlobal.Unmarshal(json_rows_bytes, &p_result)
 		if err != nil {
 			fmt.Println(err)
 		}
 
 		return p_result, intermediate_inteface
 	} else {
-		json_rows_bytes, err1 := json.Marshal(intermediate_inteface.([]interface{}))
+		json_rows_bytes, err1 := jsonIterGlobal.Marshal(intermediate_inteface.([]interface{}))
 		if err1 != nil {
 			fmt.Println(err1)
 		}
 
-		err := json.Unmarshal(json_rows_bytes, &p)
+		err := jsonIterGlobal.Unmarshal(json_rows_bytes, &p)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -436,13 +466,13 @@ func GetInstanceList(payload interface{}) []peers {
 	var myString string
 	if reflect.TypeOf(myString) == reflect.TypeOf(payload) {
 		myString = payload.(string)
-		json.Unmarshal([]byte(myString), &payload_content)
+		jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 	} else if reflect.TypeOf(payload_content) == reflect.TypeOf(payload) {
 		payload_content = payload.(map[string]interface{})
 	}
 
 	intermediate_inteface := payload_content["instance_list"]
-	json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+	json_rows_bytes, _ := jsonIterGlobal.Marshal(intermediate_inteface)
 
 	fmt.Println(intermediate_inteface)
 	reader := bytes.NewReader(json_rows_bytes)
@@ -472,7 +502,7 @@ func GetAttributeFromPayload(attribute string, payload interface{}) (interface{}
 	var myString string
 	if reflect.TypeOf(myString) == reflect.TypeOf(payload) {
 		myString = payload.(string)
-		json.Unmarshal([]byte(myString), &payload_content)
+		jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 	} else if reflect.TypeOf(payload_content) == reflect.TypeOf(payload) {
 		payload_content = payload.(map[string]interface{})
 	} else {
@@ -557,112 +587,6 @@ func ParseObjectTypeToContract(object interface{}, objectType *TypeContract) int
 	return object
 }
 
-func ParseContractToObjectType(object interface{}, contract TypeContract, objectResult interface{}) interface{} {
-
-	v := reflect.ValueOf(object)
-
-	ps := reflect.ValueOf(&object)
-	// struct
-	s := ps.Elem().Elem()
-	// for _, v := range contract.ChildrenType {
-	// 	fmt.Println(v.NameType)
-	// }
-	fmt.Println("-----------------------------------------------------")
-	fmt.Println("Entered ParseContractToObjectType")
-	fmt.Println(s.String())
-
-	if v.Kind() == reflect.Slice {
-		// fmt.Println("Size of slice:")
-		// fmt.Println(v.Len())
-		fmt.Println("-----------------------------------------------------")
-		fmt.Println("Has a slice")
-		// values := make([]interface{}, v.Len())
-		for i := 0; i < v.Len(); i++ {
-			currentInterface := v.Index(i).Interface()
-			if reflect.ValueOf(currentInterface).Kind() == reflect.Struct || reflect.ValueOf(currentInterface).Kind() == reflect.Slice {
-				result := ParseContractToObjectType(currentInterface, contract.ChildrenType[i], objectResult)
-				v.Index(i).Set(reflect.ValueOf(result))
-			}
-		}
-	} else if v.Kind() == reflect.Struct {
-		values := make([]interface{}, v.NumField())
-		// fmt.Println("------------------------------------")
-		// fmt.Println(v.NumField())
-		// fmt.Println(len(contract.ChildrenType))
-		// fmt.Println(len(contract.ChildrenType[1].ChildrenType))
-		// fmt.Println("------------------------------------")
-		// fmt.Println(contract.ChildrenType[1].ChildrenType)
-
-		for i := 0; i < v.NumField(); i++ {
-			values[i] = v.Field(i).Interface()
-			fieldName := v.Type().Field(i).Name
-			vValue := reflect.ValueOf(values[i])
-			// fmt.Println("=============================================================")
-			// fmt.Println(reflect.TypeOf(values[i]))
-			// fmt.Println(reflect.TypeOf(vValue))
-			// fmt.Println(vValue.Kind())
-			// fmt.Println(contract.ChildrenType[i].NameType)
-			// // fmt.Println(reflect.TypeOf(values[i]).String() == contract.ChildrenType[i].NameType)
-			// // fmt.Println(contract.ChildrenType)
-			// // fmt.Println(v)
-			// fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-			if reflect.TypeOf(values[i]) != nil {
-
-				// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-				// fmt.Println("CONVERSAO POLEMICA")
-				// fmt.Println(typeRegistry)
-				// fmt.Println("/" + contract.ChildrenType[i].NameType + "/")
-				// fmt.Println(typeRegistry[contract.ChildrenType[i].NameType])
-				// fmt.Println(typeRegistry[contract.ChildrenType[i].NameType] == nil)
-				// fmt.Println(contract.ChildrenType[i].NameType == "")
-				// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-				if contract.ChildrenType[i].NameType != "" && contract.ChildrenType[i].NameType != "ptr" {
-					fmt.Println("--------------------------------")
-					fmt.Println(contract.ChildrenType[i].NameType)
-					fmt.Println(reflect.TypeOf(values[i]).Name)
-					fmt.Println(fieldName)
-
-					fmt.Println("--------------------------------")
-					// fmt.Println(typeRegistry)
-					// fmt.Println(typeRegistry[contract.ChildrenType[i].NameType])
-					// newValue := vValue.Convert(typeRegistry[contract.ChildrenType[i].NameType])
-					newValue := reflect.ValueOf(ConvertTypes(vValue, contract.ChildrenType[i].NameType))
-					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-					// fmt.Println(newValue)
-					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-					// fmt.Println(vValue)
-					// fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-					if vValue.Kind() == reflect.Struct || vValue.Kind() == reflect.Slice || vValue.Kind() == reflect.Map {
-						intValue := ParseContractToObjectType(values[i], contract.ChildrenType[i], newValue)
-						newValue = reflect.ValueOf(ConvertTypes(intValue, contract.ChildrenType[i].NameType))
-						if reflect.TypeOf(values[i]).String() != contract.ChildrenType[i].NameType {
-							fmt.Println("00000000000000000000000000000000000000000000000000000")
-							fmt.Println("SHOULD GO IN")
-							fmt.Println("-----------------------------------------------------")
-							f := s.FieldByName(fieldName)
-							if f.IsValid() {
-								fmt.Println("-----------------------------------------------------")
-								fmt.Println("WAS VALID")
-								fmt.Println("-----------------------------------------------------")
-								if f.CanSet() {
-									fmt.Println("-----------------------------------------------------")
-									fmt.Println("Set a new value to Variable")
-									f.Set(newValue)
-									fmt.Println(newValue)
-								}
-							}
-						}
-					}
-
-				}
-			}
-		}
-	} else {
-
-	}
-	return object
-}
-
 func validateTypeName(name string) string {
 	return strings.Replace(name, "main.", "", -1)
 }
@@ -685,8 +609,8 @@ func InitTypes() {
 
 func ConvertTypes(object interface{}, name string) interface{} {
 	newValue := makeInstance(name)
-	jsonFilter, _ := json.Marshal(&object)
-	err1 := json.Unmarshal([]byte(string(jsonFilter)), &newValue)
+	jsonFilter, _ := jsonIterGlobal.Marshal(&object)
+	err1 := jsonIterGlobal.Unmarshal([]byte(string(jsonFilter)), &newValue)
 	if err1 != nil {
 		panic(err1)
 	}
@@ -696,11 +620,13 @@ func ConvertTypes(object interface{}, name string) interface{} {
 // ///////////////////////////////////////////////////////////////////////Mutex//////////////////////////////////////////////////////////////////
 var singleton SingletonWal
 var singletonTable SingletonTable
+var singletonIndex SingletonIndex
 
 func (sing *SingletonWal) UnmarshalWAL(fileData []byte) {
 	sing.mu.Lock()
 	defer sing.mu.Unlock()
-	err := json.Unmarshal(fileData, &(sing.wal))
+	sing.wal = make(map[string]wal_operation, 20000)
+	err := jsonIterGlobal.Unmarshal(fileData, &(sing.wal))
 
 	if err != nil {
 		fmt.Println("Mutex Wal unmarshal")
@@ -711,15 +637,31 @@ func (sing *SingletonWal) UnmarshalWAL(fileData []byte) {
 }
 
 func (sing *SingletonTable) UnmarshalMT(fileData []byte) {
+	tempMT := make(map[string][]*mem_row)
+	jsonIterGlobal.Unmarshal(fileData, &(tempMT))
 	sing.mu.Lock()
 	defer sing.mu.Unlock()
-	err := json.Unmarshal(fileData, &(sing.mt))
 
-	if err != nil {
-		fmt.Println("Mutex MT unmarshal")
-		fmt.Println(err)
-		log.Fatal(err)
-		fmt.Println(err)
+	sing.mt = make(map[string][]*mem_row, len(tempMT))
+	for table, tempRows := range tempMT {
+		newRows := make([]*mem_row, 0, len(tempRows))
+		for _, tempRow := range tempRows {
+			newDoc := make(map[string]interface{}, len((*tempRow).Parsed_Document))
+			for k, v := range tempRow.Parsed_Document {
+				newDoc[k] = v
+			}
+
+			newRow := &mem_row{
+				Key_id:          tempRow.Key_id,
+				Table_name:      tempRow.Table_name,
+				Parsed_Document: newDoc,
+			}
+
+			newRows = append(newRows, newRow)
+			tempRow.Parsed_Document = nil
+		}
+
+		sing.mt[table] = newRows
 	}
 }
 
@@ -791,9 +733,11 @@ func (sing *SingletonWal) TryRecoverData() (bool, []error) {
 							"instance_list":  replicationPoints,
 							"guid":           indexWo,
 						}
+						// rsocket_json_requests.InitConn()
 						// param2 := make(map[string]interface{})
-						// param2[indexWo] = param
-						_, err := rsocket_json_requests.RequestJSON("/"+index_row.Name+"/update_wal_new", param)
+						// param2[indexWo] =
+						CheckConnection(index_row)
+						_, err := rsocket_json_requests.RequestJSONNew("/"+index_row.Name+"/update_wal_new", param, index_row.Name)
 						if err != nil {
 							fmt.Println("err::::::")
 							fmt.Println(err)
@@ -829,4 +773,98 @@ func (sing *SingletonWal) Get(guid string) wal_operation {
 	sing.mu.RLock()
 	defer sing.mu.RUnlock()
 	return sing.wal[guid]
+}
+
+func (sing *SingletonIndex) AttachAllIndexes() {
+	for _, indexTable := range configs_file.Index {
+		for _, index := range indexTable {
+			if index.IndexType == "HASH" {
+				sing.AttachNewHashIndex(index)
+			} else if index.IndexType == "BTREE" {
+				fmt.Println("Index!!BTREE!!")
+				sing.AttachNewBTreeIndex(index)
+			}
+		}
+	}
+}
+
+func CheckConnection(peer peers) {
+
+	if !rsocket_json_requests.GetStatusConn(peer.Name) {
+		fmt.Println("---------------------------------------------------------------")
+		fmt.Println("Not connected")
+		fmt.Println("---------------------------------------------------------------")
+		port, _ := strconv.Atoi(peer.Port)
+		rsocket_json_requests.InitConn(peer.Name, peer.Ip, port)
+
+	}
+
+	fmt.Println("---------------------------------------------------------------")
+	fmt.Println("Connected!!")
+	fmt.Println(peer)
+	fmt.Println("---------------------------------------------------------------")
+}
+
+func (sing *SingletonIndex) AttachNewHashIndex(index TableIndex) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+
+	if sing.hashIndex == nil {
+		sing.hashIndex = make(map[string]map[string]map[string]*mem_row) //, 10)
+	}
+
+	if _, ok := sing.hashIndex[index.TableName]; !ok {
+		sing.hashIndex[index.TableName] = make(map[string]map[string]*mem_row) //, 200000)
+	}
+
+	if _, ok := sing.hashIndex[index.TableName][index.ColumnName]; !ok {
+		sing.hashIndex[index.TableName][index.ColumnName] = make(map[string]*mem_row) //, 200000)
+	}
+
+	for iRow, row := range singletonTable.mt[index.TableName] {
+		str := fmt.Sprintf("%v", row.Parsed_Document[index.ColumnName])
+		fmt.Println("Index!!")
+		sing.hashIndex[index.TableName][index.ColumnName][str] = singletonTable.mt[index.TableName][iRow]
+	}
+}
+
+func (sing *SingletonIndex) AttachNewBTreeIndex(index TableIndex) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	if sing.btreeIndex == nil {
+		sing.btreeIndex = make(map[string]map[string][]*mem_row)
+	}
+
+	if _, ok := sing.btreeIndex[index.TableName]; !ok {
+		sing.btreeIndex[index.TableName] = make(map[string][]*mem_row)
+	}
+
+	fmt.Println("Index!! btree1111!!")
+	for iRow, _ := range singletonTable.mt[index.TableName] {
+		// str := fmt.Sprintf("%v", row.Parsed_Document[index.ColumnName])
+		fmt.Println("Index!! btree!!")
+		sing.btreeIndex[index.TableName][index.ColumnName] = append(sing.btreeIndex[index.TableName][index.ColumnName], singletonTable.mt[index.TableName][iRow])
+	}
+
+	sort.Slice(sing.btreeIndex[index.TableName][index.ColumnName], func(i, j int) bool {
+		first := fmt.Sprintf("%v", sing.btreeIndex[index.TableName][index.ColumnName][i].Parsed_Document[index.ColumnName])
+		second := fmt.Sprintf("%v", sing.btreeIndex[index.TableName][index.ColumnName][j].Parsed_Document[index.ColumnName])
+		iFirst, _ := strconv.Atoi(first)
+		iSecond, _ := strconv.Atoi(second)
+		fmt.Println("Sort!!")
+		return iFirst < iSecond
+	})
+
+}
+
+func (sing *SingletonIndex) AttachNewHashIndexUnity(tableName string, columnName string, value string, row *mem_row) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	sing.hashIndex[tableName][columnName][value] = row
+}
+
+func (sing *SingletonIndex) AttachNewBtreeIndexUnity(tableName string, columnName string, value string, row *mem_row) {
+	sing.mu.Lock()
+	defer sing.mu.Unlock()
+	sing.btreeIndex[tableName][columnName] = append(sing.btreeIndex[tableName][columnName], row)
 }

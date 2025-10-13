@@ -33,7 +33,7 @@ func getWalDisk() {
 		fmt.Println(err)
 	}
 
-	// err = json.Unmarshal([]byte(root), &wal)
+	// err = jsonIterGlobal.Unmarshal([]byte(root), &wal)
 
 	// if err != nil {
 	// 	fmt.Println("Wal unmarshal")
@@ -49,11 +49,11 @@ func readWalRsocket(payload interface{}) interface{} {
 
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
-	json.Unmarshal([]byte(myString), &payload_content)
+	jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 
 	//payload_content, _ :=  payload.(map[string] interface{})
 	intermediate_inteface := payload_content["body"].(string)
-	json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+	json_rows_bytes, _ := jsonIterGlobal.Marshal(intermediate_inteface)
 	reader := bytes.NewReader(json_rows_bytes)
 	dec := json.NewDecoder(reader)
 	dec.DisallowUnknownFields()
@@ -74,7 +74,8 @@ func readWalRsocket(payload interface{}) interface{} {
 		if index_row.Name != configs_file.Instance_name {
 			_port, _ := strconv.Atoi(index_row.Port)
 			rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
-			response, err := rsocket_json_requests.RequestJSON("/"+index_row.Name+"/update_wal_new", intermediate_inteface)
+			CheckConnection(index_row)
+			response, err := rsocket_json_requests.RequestJSONNew("/"+index_row.Name+"/update_wal_new", intermediate_inteface, index_row.Name)
 			if err != nil {
 				fmt.Println("err::::::")
 				fmt.Println(err)
@@ -102,7 +103,7 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 
 	// index_row := it.Index_rows[it.Index_WAL]
 
-	json_data, err := json.Marshal(data_post)
+	json_data, err := jsonIterGlobal.Marshal(data_post)
 
 	if err != nil {
 		log.Fatal(err)
@@ -115,7 +116,7 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 		"operation_type": operation,
 	}
 
-	jsonParam, _ := json.Marshal(param)
+	jsonParam, err := jsonIterGlobal.Marshal(param)
 	fmt.Println(string(jsonParam))
 	if err != nil {
 		log.Fatal(err)
@@ -123,13 +124,24 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 
 	counter := 0
 
+	fmt.Println("---------------------------------------------------------------")
+	fmt.Println("gOT INTO GetNextNodesToInsertAndWriteWal")
+	fmt.Println("---------------------------------------------------------------")
+
 	for true {
 		counter++
 		index_row := configs_file.Peers[indexWal]
 		_port, _ := strconv.Atoi(index_row.Port)
 		rsocket_json_requests.RequestConfigs(index_row.Ip, _port)
-		_, err = rsocket_json_requests.RequestJSON("/"+index_row.Name+"/read_wal_strategy", string(jsonParam))
-
+		CheckConnection(index_row)
+		fmt.Println(counter)
+		fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+		fmt.Println(index_row.Name)
+		fmt.Println("---------------------------------------------------------------")
+		_, err = rsocket_json_requests.RequestJSONNew("/"+index_row.Name+"/read_wal_strategy", string(jsonParam), index_row.Name)
+		fmt.Println("---------------------------------------------------------------")
+		fmt.Println(index_row.Name)
+		fmt.Println("---------------------------------------------------------------")
 		if err != nil {
 			if counter > len(configs_file.Peers) {
 				fmt.Println("No nodes available as WAL (Write Ahead Log)")
@@ -140,8 +152,14 @@ func GetNextNodesToInsertAndWriteWal(data_post *[]mem_row, query string, operati
 			} else {
 				indexWal = 0
 			}
+			fmt.Println("---------------------------------------------------------------")
+			fmt.Println("err")
+			fmt.Println("---------------------------------------------------------------")
 			fmt.Println("err::::::")
 		} else {
+			fmt.Println("---------------------------------------------------------------")
+			fmt.Println("Done")
+			fmt.Println("---------------------------------------------------------------")
 			break
 		}
 	}
@@ -154,7 +172,7 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 	var myString string
 	if reflect.TypeOf(myString) == reflect.TypeOf(payload) {
 		myString = payload.(string)
-		json.Unmarshal([]byte(myString), &fullPayload)
+		jsonIterGlobal.Unmarshal([]byte(myString), &fullPayload)
 	} else if reflect.TypeOf(fullPayload) == reflect.TypeOf(payload) {
 		fullPayload = payload.(map[string]interface{})
 	}
@@ -182,7 +200,7 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 	"guid":"%s"
 	}
 	`
-	jsonList, _ := json.Marshal(replicationPoints)
+	jsonList, _ := jsonIterGlobal.Marshal(replicationPoints)
 	jsonStr = fmt.Sprintf(jsonStr, intermediate_inteface, string(jsonList), query, operation, guid)
 
 	// fmt.Println("::::::::::::::::::::")
@@ -196,7 +214,8 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 		// wg.Add(1)
 		_port, _ := strconv.Atoi(successfulNode.Port)
 		rsocket_json_requests.RequestConfigs(successfulNode.Ip, _port)
-		_, err := rsocket_json_requests.RequestJSON("/"+successfulNode.Name+"/update_wal_new", jsonStr)
+		CheckConnection(successfulNode)
+		_, err := rsocket_json_requests.RequestJSONNew("/"+successfulNode.Name+"/update_wal_new", jsonStr, successfulNode.Name)
 
 		if err != nil {
 			fmt.Println("err::::::update_wal_new")
@@ -216,13 +235,14 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 	"guid":"%s"
 	}
 	`
-	jsonSuccesfulNodes, _ := json.Marshal(successfulNodes)
+	jsonSuccesfulNodes, _ := jsonIterGlobal.Marshal(successfulNodes)
 	jsonStr = fmt.Sprintf(jsonStr, string(jsonSuccesfulNodes), guid)
 
 	for _, node := range successfulNodes {
 		_port, _ := strconv.Atoi(node.Port)
 		rsocket_json_requests.RequestConfigs(node.Ip, _port)
-		_, err := rsocket_json_requests.RequestJSON("/"+node.Name+"/update_successful_nodes_wal", string(jsonStr))
+		CheckConnection(node)
+		_, err := rsocket_json_requests.RequestJSONNew("/"+node.Name+"/update_successful_nodes_wal", string(jsonStr), node.Name)
 		if err != nil {
 			fmt.Println("err::::::update_successful_nodes_wal")
 			fmt.Println(node.Port)
@@ -236,7 +256,8 @@ func readWalStrategyRsocket(payload interface{}) interface{} {
 	if hadError {
 		_port, _ := strconv.Atoi(replicationPoints[successfulRow].Port)
 		rsocket_json_requests.RequestConfigs(replicationPoints[successfulRow].Ip, _port)
-		_, err := rsocket_json_requests.RequestJSON("/"+replicationPoints[successfulRow].Name+"/trigger_recover_data_nodes", "")
+		CheckConnection(replicationPoints[successfulRow])
+		_, err := rsocket_json_requests.RequestJSONNew("/"+replicationPoints[successfulRow].Name+"/trigger_recover_data_nodes", "", replicationPoints[successfulRow].Name)
 		if err != nil {
 			fmt.Println("err::::::trigger_recover_data_nodes")
 			fmt.Println(replicationPoints[successfulRow].Port)
@@ -341,7 +362,7 @@ func UpdateWal(payload interface{}) interface{} {
 	}
 	// wal[guid] = wo
 	singleton.SetOperationWAL(guid, wo)
-	jsonParam, _ := json.Marshal(param)
+	jsonParam, _ := jsonIterGlobal.Marshal(param)
 
 	//Check if this instance should be updated
 	// if configs_file.Instance_name in  wo.InstancesToUpdate
@@ -457,8 +478,8 @@ func UpdateSuccessfulNodesWal(payload interface{}) interface{} {
 		return "Error"
 	}
 	var nodesSuccessful []peers
-	bytesInt, _ := json.Marshal(nodesInterface)
-	json.Unmarshal(bytesInt, &nodesSuccessful)
+	bytesInt, _ := jsonIterGlobal.Marshal(nodesInterface)
+	jsonIterGlobal.Unmarshal(bytesInt, &nodesSuccessful)
 	guidInterface, err := GetAttributeFromPayload("guid", payload)
 	if err != nil {
 		fmt.Println("*******************")
@@ -497,7 +518,9 @@ func UpdateWalWholeCluster(guid string, wo wal_operation) {
 			"guid": guid,
 			"body": wo,
 		}
-		_, err := rsocket_json_requests.RequestJSON("/"+peerNode.Name+"/update_wal_only", param)
+
+		CheckConnection(peerNode)
+		_, err := rsocket_json_requests.RequestJSONNew("/"+peerNode.Name+"/update_wal_only", param, peerNode.Name)
 		if err != nil {
 			fmt.Println("err::::::")
 			fmt.Println(err)
@@ -522,8 +545,8 @@ func UpdateWalOnly(payload interface{}) interface{} {
 		fmt.Println(err)
 	}
 	var walOperation wal_operation
-	bytesInt, _ := json.Marshal(walOperationInterface)
-	json.Unmarshal(bytesInt, &walOperation)
+	bytesInt, _ := jsonIterGlobal.Marshal(walOperationInterface)
+	jsonIterGlobal.Unmarshal(bytesInt, &walOperation)
 	// wal[guid] = walOperation
 	singleton.SetOperationWAL(guid, walOperation)
 

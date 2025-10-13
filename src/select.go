@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"slices"
+	"time"
 
 	//"errors"
 	"encoding/json"
@@ -37,7 +39,56 @@ type mem_table_queries struct {
 	Rows          interface{}
 }
 
-// func select_data_where_worker_equals_rsocket(payload interface{}) interface{} {
+func selectDataWhereWorkerEquals(payload interface{}) interface{} {
+	oldTIme := time.Now()
+
+	payload_content, ok := payload.(map[string]interface{})
+	if !ok {
+		fmt.Println("ERROR!")
+	}
+
+	table_name := payload_content["table"].(string)
+	where_field := payload_content["where_field"].(string)
+	where_content := payload_content["where_content"].(string)
+
+	// _, existsInIndex := singletonIndex.btreeIndex[filter.TableObject[0].Name][cTree.Clause]
+	// if existsInIndex {
+	// 	resultBSearch, found := GetBinaryIndex(intValue, 0, len(singletonIndex.btreeIndex[newFilter.TableName][newFilter.ColumnName]), newFilter)
+	// 	if found {
+	// 		fmt.Println("Found index")
+	// 		fmt.Println(resultBSearch)
+	// 	}
+	// 	if resultBSearch > -1 {
+	// 		indexInFilter = append(indexInFilter, resultBSearch)
+	// 	} else {
+	// 		return false
+	// 	}
+
+	// var rows_result []mem_row
+	// for _, row := range mt.Rows {
+	// 	if row.Table_name == table_name {
+	// 		if row.Parsed_Document[where_field] == where_content {
+	// 			rows_result = append(rows_result, row)
+	// 		}
+	// 	}
+	// }
+
+	hashIndex, existsInIndex := singletonIndex.hashIndex[table_name][where_field]
+	value := fmt.Sprintf("%v", where_content)
+	if existsInIndex {
+		row := *hashIndex[value]
+		newRow := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
+		// _query[table_name] = append(_query[table_name], newRow)
+		fmt.Println(time.Now().Sub(oldTIme))
+
+		return newRow
+
+	}
+
+	return nil
+}
+
+// func select_data_where_worker_between_rsocket(payload interface{}) interface{} {
 
 // 	payload_content, ok := payload.(map[string]interface{})
 // 	if !ok {
@@ -45,8 +96,11 @@ type mem_table_queries struct {
 // 	}
 
 // 	table_name := payload_content["table"].(string)
-// 	where_field := payload_content["where_field"].(string)
-// 	where_content := payload_content["where_content"].(string)
+// 	where_field_from := payload_content["where_field_from"].(string)
+// 	where_content_from := payload_content["where_content_from"].(string)
+
+// 	where_field_to := payload_content["where_field_to"].(string)
+// 	where_content_to := payload_content["where_content_to"].(string)
 
 // 	var rows_result []mem_row
 // 	for _, row := range mt.Rows {
@@ -105,7 +159,7 @@ func selectDataRsocket(payload interface{}) interface{} {
 	for _, ir := range configs_file.Peers {
 		jsonStr = fmt.Sprintf(jsonStr, table_name, where_field, where_content)
 		jsonMap := make(map[string]interface{})
-		err1 := json.Unmarshal([]byte(jsonStr), &jsonMap)
+		err1 := jsonIterGlobal.Unmarshal([]byte(jsonStr), &jsonMap)
 		if err1 != nil {
 			fmt.Println(err1)
 		}
@@ -113,13 +167,14 @@ func selectDataRsocket(payload interface{}) interface{} {
 		_port, _ := strconv.Atoi(ir.Port)
 		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
 
-		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		CheckConnection(ir)
+		response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 		if err != nil {
 			fmt.Println(err)
 		} else {
 			if response != nil {
 				intermediate_inteface := response.([]interface{})
-				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+				json_rows_bytes, _ := jsonIterGlobal.Marshal(intermediate_inteface)
 
 				reader := bytes.NewReader(json_rows_bytes)
 
@@ -137,88 +192,6 @@ func selectDataRsocket(payload interface{}) interface{} {
 	}
 
 	return result
-}
-
-func queryDataShardingRsocket(payload interface{}) interface{} {
-	var logic_filters Filter
-	var tables []SqlClause
-	var contract TypeContract
-	var filter Filter
-
-	payload_content, ok := payload.(map[string]interface{})
-	if !ok {
-		fmt.Println("ERROR - query_data_sharding_rsocket")
-	}
-	logic_filters_intermediate := payload_content["filter"]
-	jsonbody_filters, errFilters := json.Marshal(logic_filters_intermediate)
-	if errFilters != nil {
-		// do error check
-		fmt.Println(errFilters)
-	}
-
-	if err := json.Unmarshal(jsonbody_filters, &logic_filters); err != nil {
-		// do error check
-		fmt.Println(err)
-	}
-
-	tables_intermediate := payload_content["tables"]
-	jsonbody_tables, errTables := json.Marshal(tables_intermediate)
-	if errFilters != nil {
-		// do error check
-		fmt.Println(errTables)
-	}
-
-	if err := json.Unmarshal(jsonbody_tables, &tables); err != nil {
-		// do error check
-		fmt.Println(err)
-	}
-
-	contract_intermediate := payload_content["contract"]
-	jsonbody_contract, errContract := json.Marshal(contract_intermediate)
-	if errContract != nil {
-		// do error check
-		fmt.Println(errContract)
-	}
-
-	if err := json.Unmarshal(jsonbody_contract, &contract); err != nil {
-		// do error check
-		fmt.Println(err)
-	}
-
-	fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-	fmt.Println("Contract")
-	fmt.Println(contract)
-	fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-
-	InitTypes()
-	filter = ParseContractToObjectType(logic_filters, contract, filter).(Filter)
-
-	fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-	fmt.Println("FILTERS")
-	fmt.Println(filter)
-	fmt.Println("0000000000000000000000000000000000000000000000000000000000000")
-
-	fmt.Println("-----------------------------------------------------")
-	fmt.Println("Tables:")
-	fmt.Println(tables)
-	fmt.Println(logic_filters)
-	fmt.Println("-----------------------------------------------------")
-	ctx := make(map[string]interface{})
-	_query := make(map[string][]mem_table_queries)
-	ctx["_query"] = _query
-	_analyzedFilterList := make(map[string]int)
-	ctx["_analyzedFilterList"] = _analyzedFilterList
-
-	//Distribute here the call to other instances.
-	filteredResult := selectFieldsDecoupled2(filter, filter, 0, tables, "", &ctx)
-
-	fmt.Println("----------------------------------------------------")
-
-	fmt.Println("filteredResult")
-	fmt.Println(filteredResult)
-	fmt.Println("----------------------------------------------------")
-
-	return filteredResult
 }
 
 func ParseSqlClauseToStringTables(tables []SqlClause) []string {
@@ -374,9 +347,9 @@ func GetQueryDataFromShardQuery(peer []peers, query string) []mem_table_queries 
 		fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
 		jsonMap := make(map[string]interface{})
-		errMap := json.Unmarshal([]byte(jsonStr1), &jsonMap)
+		errMap := jsonIterGlobal.Unmarshal([]byte(jsonStr1), &jsonMap)
 		if errMap != nil {
-			fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&ERROR")
+			fmt.Println("ERROR")
 			fmt.Println(errMap)
 
 		}
@@ -386,13 +359,14 @@ func GetQueryDataFromShardQuery(peer []peers, query string) []mem_table_queries 
 
 		fmt.Println(jsonMap)
 
-		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		CheckConnection(ir)
+		response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 		if err != nil {
 			fmt.Println(err)
 		} else {
 			if response != nil {
 				intermediate_inteface := response.([]interface{})
-				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+				json_rows_bytes, _ := jsonIterGlobal.Marshal(intermediate_inteface)
 
 				reader := bytes.NewReader(json_rows_bytes)
 				dec := json.NewDecoder(reader)
@@ -417,9 +391,9 @@ func GetQueryDataFromShard(peer []peers, tables []SqlClause, logic_filters Filte
 	var rows []mem_table_queries
 	var innerObjectType TypeContract
 	ParseObjectTypeToContract(logic_filters, &innerObjectType)
-	jsonFilter, _ := json.Marshal(&logic_filters)
-	jsonTables, _ := json.Marshal(&tables)
-	jsonContract, _ := json.Marshal(&innerObjectType)
+	jsonFilter, _ := jsonIterGlobal.Marshal(&logic_filters)
+	jsonTables, _ := jsonIterGlobal.Marshal(&tables)
+	jsonContract, _ := jsonIterGlobal.Marshal(&innerObjectType)
 
 	fmt.Println("000000000000000000000000000000000000000000000000000000000000000000")
 	fmt.Println("Final Contract Object")
@@ -442,7 +416,7 @@ func GetQueryDataFromShard(peer []peers, tables []SqlClause, logic_filters Filte
 		fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
 		jsonMap := make(map[string]interface{})
-		errMap := json.Unmarshal([]byte(jsonStr1), &jsonMap)
+		errMap := jsonIterGlobal.Unmarshal([]byte(jsonStr1), &jsonMap)
 		if errMap != nil {
 			fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&ERROR")
 			fmt.Println(errMap)
@@ -454,13 +428,14 @@ func GetQueryDataFromShard(peer []peers, tables []SqlClause, logic_filters Filte
 
 		fmt.Println(jsonMap)
 
-		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		CheckConnection(ir)
+		response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 		if err != nil {
 			fmt.Println(err)
 		} else {
 			if response != nil {
 				intermediate_inteface := response.([]interface{})
-				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+				json_rows_bytes, _ := jsonIterGlobal.Marshal(intermediate_inteface)
 
 				reader := bytes.NewReader(json_rows_bytes)
 				dec := json.NewDecoder(reader)
@@ -563,13 +538,16 @@ func selectFieldsDecoupled2(logic_filters Filter, fullLogicFilters Filter, index
 			fmt.Println("The Tables")
 			fmt.Println(tables)
 			fmt.Println("----------------------------------------------------------------------------------")
+			fmt.Println((*ctx)["_query"])
+
 			if len(tables) > 0 {
 				for _, table := range tables {
 					//Check existance in query_objects
 					foundMemTable := isInQueryObject(table, ctx)
 					if !foundMemTable {
 						//Check existance in (index_ for distributed) mem_table
-						if singletonTable.IsInMemTable(table, logic_filters.ChildFilters[0].SelectClause, ctx) == false {
+
+						if singletonTable.IsInMemTable(table, logic_filters.ChildFilters[0].SelectClause, logic_filters, ctx) == false {
 							fmt.Println("----------------------------------------------------------------------------------")
 							fmt.Println("Not In MemTable")
 							fmt.Println(tables)
@@ -639,6 +617,8 @@ func GetTableSummarize(tables []string, filter Filter, selectObject []SqlClause,
 	fmt.Println("----------------------------------------------------------------------------------")
 	fmt.Println("GetTableSummarize")
 
+	// ManageQueryIndexes(filter)
+
 	if aliasSubquery != "" {
 		tableWrite = aliasSubquery
 	} else {
@@ -653,9 +633,7 @@ func GetTableSummarize(tables []string, filter Filter, selectObject []SqlClause,
 				for _, column := range selectObject {
 					if !checkSelectStar(column, &columns, _query[table][index]) {
 						columnResult := ProjectColumns(_query[table][index], column, ctx)
-						fmt.Println("----------------------------------------------------------------------------------")
-						fmt.Println("Not Star")
-						fmt.Println(columnResult)
+
 						if column.Alias != "" {
 							columnResult.Alias = column.Alias
 						} // columnResult.Name = column.Name
@@ -683,6 +661,13 @@ func GetTableSummarize(tables []string, filter Filter, selectObject []SqlClause,
 
 func CheckColumnExistance(row mem_table_queries, clause sqlparserproject.CommandTree) (interface{}, bool) {
 	rowColumn := row.Rows.(map[string]interface{})
+	for _, rel := range row.Relationships {
+		if rel.TableNameRight == clause.Prefix {
+			rowColumn = (*(rel.RelatedRow)).Rows.(map[string]interface{})
+			break
+		}
+	}
+
 	actualValue, found := rowColumn[clause.Clause]
 	if found == false {
 		for _, relationship := range row.Relationships {
@@ -706,7 +691,7 @@ func ProjectColumns(row mem_table_queries, column SqlClause, ctx *map[string]int
 	var columnManSqlClause SqlClause
 	if reflect.TypeOf(column.SelectableObject) == reflect.TypeOf(clauseValidation) {
 		fmt.Println("*****************************************")
-		fmt.Println("Found type of the column - CommandTree")
+		fmt.Println("Found type of the column")
 		clause := column.SelectableObject.(sqlparserproject.CommandTree)
 		// columns[clause.Clause] = make(map[string]interface{})
 		rowColumn, found := CheckColumnExistance(row, clause)
@@ -760,12 +745,12 @@ func checkSelectStar(columnResult SqlClause, columns *map[string]interface{}, ro
 func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx *map[string]interface{}) {
 
 	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
-	_indexFilter := (*ctx)["_indexFilter"].(int)
+	// _indexFilter := (*ctx)["_indexFilter"].(int)
 
-	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	fmt.Println("IndexFilter")
-	fmt.Println(_indexFilter)
-	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	// fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	// fmt.Println("IndexFilter")
+	// fmt.Println(_indexFilter)
+	// fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
 	for _, table := range tables {
 		//Search in nodes
@@ -782,24 +767,24 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx *map[string]in
 		// 	return
 		// }
 		//need to check the safety of doing this in parallel
-		if !singletonTable.IsInMemTable(table, filter.ChildFilters[0].SelectClause, ctx) {
+		if !singletonTable.IsInMemTable(table, filter.ChildFilters[0].SelectClause, filter, ctx) {
 
 			for _, ir := range configs_file.Peers {
 				if configs_file.Instance_name != ir.Name {
 					var rows []mem_table_queries
-					jsonFilter, _ := json.Marshal(&filter)
+					jsonFilter, _ := jsonIterGlobal.Marshal(&filter)
 					jsonStr = fmt.Sprintf(jsonStr, table.Name, table.Alias, string(jsonFilter))
 					jsonMap := make(map[string]interface{})
-					err1 := json.Unmarshal([]byte(jsonStr), &jsonMap)
+					err1 := jsonIterGlobal.Unmarshal([]byte(jsonStr), &jsonMap)
 					if err1 != nil {
 						fmt.Println(err1)
 					}
 					//New receiving function
 					url := "/" + ir.Name + "/select_table"
-					_port, _ := strconv.Atoi(ir.Port)
-					rsocket_json_requests.RequestConfigs(ir.Ip, _port)
-
-					response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+					// _port, _ := strconv.Atoi(ir.Port)
+					// rsocket_json_requests.RequestConfigs(ir.Ip, _port)
+					CheckConnection(ir)
+					response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 
 					if err != nil {
 						fmt.Println(err)
@@ -807,7 +792,7 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx *map[string]in
 						if response != nil {
 							//add to _query_temp_tables
 							intermediate_inteface := response.([]interface{})
-							json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+							json_rows_bytes, _ := jsonIterGlobal.Marshal(intermediate_inteface)
 
 							reader := bytes.NewReader(json_rows_bytes)
 							dec := json.NewDecoder(reader)
@@ -968,18 +953,19 @@ func selectDataRsocket_sql(payload interface{}) interface{} {
 	for _, ir := range configs_file.Peers {
 		jsonStr = fmt.Sprintf(jsonStr, table_name, where_field, where_content)
 		jsonMap := make(map[string]interface{})
-		json.Unmarshal([]byte(jsonStr), &jsonMap)
+		jsonIterGlobal.Unmarshal([]byte(jsonStr), &jsonMap)
 		url := "/" + ir.Name + "/select_data_where_worker_" + where_operator
 		_port, _ := strconv.Atoi(ir.Port)
 		rsocket_json_requests.RequestConfigs(ir.Ip, _port)
 
-		response, err := rsocket_json_requests.RequestJSON(url, jsonMap)
+		CheckConnection(ir)
+		response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 		if err != nil {
 			fmt.Println(err)
 		} else {
 			if response != nil {
 				intermediate_inteface := response.([]interface{})
-				json_rows_bytes, _ := json.Marshal(intermediate_inteface)
+				json_rows_bytes, _ := jsonIterGlobal.Marshal(intermediate_inteface)
 
 				reader := bytes.NewReader(json_rows_bytes)
 				dec := json.NewDecoder(reader)
@@ -1005,7 +991,10 @@ func evaluateLogic(current_row mem_table_queries, logicObject2 *Filter, ctx *map
 	previousGate := ""
 	var treeReference sqlparserproject.CommandTree
 	logicObject := *logicObject2
-	_analyzedFilterList := (*ctx)["_analyzedFilterList"].(map[string]int)
+	var _analyzedFilterList map[string]int
+	if resultFilterList, found := (*ctx)["_analyzedFilterList"]; found {
+		_analyzedFilterList = resultFilterList.(map[string]int)
+	}
 
 	for _, filter := range logicObject.ChildFilters {
 
@@ -1265,12 +1254,17 @@ func (sing *SingletonTable) SelectTable(table_name string, alias string) []mem_t
 	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	var rows_result []mem_table_queries
 	for _, row := range sing.mt[table_name] {
+
+		fmt.Println("table_name: " + table_name)
+		fmt.Println("row.Table_name: " + row.Table_name)
+		fmt.Println(table_name == row.Table_name)
+
 		if row.Table_name == table_name {
 
-			if alias != "" {
-				table_name = alias
+			if alias == "" {
+				alias = table_name
 			}
-			rowMemQuery := mem_table_queries{TableName: table_name, Rows: row.Parsed_Document}
+			rowMemQuery := mem_table_queries{TableName: alias, Rows: row.Parsed_Document}
 			rows_result = append(rows_result, rowMemQuery)
 		}
 	}
@@ -1282,11 +1276,16 @@ func (sing *SingletonTable) SelectTable(table_name string, alias string) []mem_t
 	return rows_result
 }
 
-func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []SqlClause, ctx *map[string]interface{}) bool {
+func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []SqlClause, filter Filter, ctx *map[string]interface{}) bool {
 	result := false
 	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
 	// var clauseValidation sqlparserproject.CommandTree
 	tableName := tableObject.Name
+
+	//Place to call the Index verification. I need the filtter here
+	if ManageQueryIndexes(filter, ctx) {
+		return true
+	}
 
 	sing.mu.RLock()
 	defer sing.mu.RUnlock()
@@ -1299,6 +1298,7 @@ func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []S
 			} else {
 				name = tableObject.Alias
 			}
+
 			newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
 			_query[name] = append(_query[name], newRow)
 			result = true
@@ -1306,4 +1306,282 @@ func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []S
 	}
 
 	return result
+}
+
+func ManageQueryIndexes(filter Filter, ctx *map[string]interface{}) bool {
+
+	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
+	// var checkCommandTree sqlparserproject.CommandTree
+	//Does the table have indexes?
+	_, exists := configs_file.Index[filter.TableObject[0].Name]
+	var indexInFilter []int
+	indexAppears := 0
+	var filtersIndex []SimplifiedFilter
+
+	if exists {
+		name := filter.TableObject[0].Name
+		for _, index := range configs_file.Index[filter.TableObject[0].Name] {
+			for _, child := range filter.ChildFilters[2].ChildFilters {
+				rightValue := child.CommandRight
+				leftValue := child.CommandLeft
+				if strings.ToLower(child.Gate) != "and" && child.Gate != "" {
+					return false
+				}
+
+				if index.IndexType == "HASH" {
+
+					//add row to result as mem_table_queries if there is no more filters for now
+					side, cTree := CheckWhichSideContainsColumn(leftValue, rightValue)
+					var value string
+					//side = 0 - both, side = 1 - right, side = 2 - left, side = -1 - none
+
+					switch side {
+					case 1:
+						hashIndex, existsInIndex := singletonIndex.hashIndex[filter.TableObject[0].Name][cTree.Clause]
+						value = fmt.Sprintf("%v", leftValue)
+						if existsInIndex {
+							row := *hashIndex[value]
+							newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
+							_query[name] = append(_query[name], newRow)
+							return true
+
+						}
+						break
+					case 2:
+						hashIndex, existsInIndex := singletonIndex.hashIndex[filter.TableObject[0].Name][cTree.Clause]
+						value = fmt.Sprintf("%v", rightValue)
+						if existsInIndex {
+							row := *hashIndex[value]
+							newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
+							_query[name] = append(_query[name], newRow)
+							return true
+
+						}
+						break
+					}
+
+					// GetValueFromFilter
+					// cTree := child.CommandLeft.(sqlparserproject.CommandTree)
+
+				} else if index.IndexType == "BTREE" {
+					side, cTree := CheckWhichSideContainsColumn(leftValue, rightValue)
+					var intValue int
+					switch side {
+					case 1:
+						str := fmt.Sprintf("%v", leftValue)
+						intValue, _ = strconv.Atoi(str)
+						break
+					case 2:
+						str := fmt.Sprintf("%v", rightValue)
+
+						intValue, _ = strconv.Atoi(str)
+						break
+					default:
+						return false
+					}
+					fmt.Println("VALUE::")
+					fmt.Println(intValue)
+
+					newFilter := SimplifiedFilter{ColumnName: cTree.Clause, TableName: name, Operator: child.Operation}
+					fmt.Println("FILTER::")
+					fmt.Println(newFilter)
+					_, existsInIndex := singletonIndex.btreeIndex[filter.TableObject[0].Name][cTree.Clause]
+					if existsInIndex {
+						resultBSearch, found := GetBinaryIndex(intValue, 0, len(singletonIndex.btreeIndex[newFilter.TableName][newFilter.ColumnName]), newFilter)
+						if found {
+							fmt.Println("Found index")
+							fmt.Println(resultBSearch)
+						}
+						if resultBSearch > -1 {
+							indexInFilter = append(indexInFilter, resultBSearch)
+						} else {
+							return false
+						}
+
+						if len(filtersIndex) > 0 {
+							if filtersIndex[0].ColumnName == cTree.Clause {
+								if resultBSearch < filtersIndex[0].Index && child.Operation == "bigger_than" {
+									// newFilter := SimplifiedFilter{Index: resultBSearch, ColumnName: cTree.Clause}
+									newFilter.Index = resultBSearch
+									filtersIndex = slices.Insert(filtersIndex, 0, newFilter)
+								} else if resultBSearch > filtersIndex[0].Index && child.Operation == "smaller_than" {
+									// newFilter := SimplifiedFilter{Index: resultBSearch, ColumnName: cTree.Clause}
+									newFilter.Index = resultBSearch
+									filtersIndex = append(filtersIndex, newFilter)
+								} else {
+									return false
+								}
+
+								//check if range and sign are bigger or smaller then place it before or after the previous
+
+							} else {
+								return false // Only supporting 1 index per time for now
+							}
+						} else {
+							newFilter.Index = resultBSearch
+							filtersIndex = append(filtersIndex, newFilter)
+						}
+						// if any of the gates is OR we leave the function
+
+						indexAppears++
+					}
+
+				}
+
+			}
+
+			// check indexType
+			// if index == Hash AND it is part of the query AND there is no other condition
+			// if index == Btree AND it is part of the query
+		}
+
+		if indexAppears > 0 {
+			counterCondition := 0
+			if len(filtersIndex) > 0 {
+				fmt.Println("counterCOndition")
+				fmt.Println(counterCondition)
+				fmt.Println(filtersIndex)
+				if filtersIndex[0].Operator == "smaller_than" && len(filtersIndex) < 2 {
+					counterCondition = len(singletonIndex.btreeIndex[filtersIndex[0].TableName][filtersIndex[0].ColumnName]) - 1
+				}
+
+				for indexCondition(&counterCondition, filtersIndex) {
+					fmt.Println("-------------counterCondition--------------------")
+					fmt.Println(counterCondition)
+					fmt.Println("-------------------------------------------------")
+					row := (*singletonIndex.btreeIndex[filtersIndex[0].TableName][filtersIndex[0].ColumnName][counterCondition])
+					newRow := mem_table_queries{TableName: name, Rows: row.Parsed_Document}
+					_query[name] = append(_query[name], newRow)
+				}
+
+				return true
+
+			}
+		}
+
+	}
+
+	//check what columns are part
+	// configs_file.Index[filter.TableObject[0].Name].
+	//if filter.TableObject[0].Name //Check how this is going to wok for subqueries
+	//if column.Alias is in singletonTable.hashIndex
+	//
+
+	fmt.Println("000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+
+	return false
+}
+
+type SimplifiedFilter struct {
+	Index        int
+	Operator     string
+	IndexInTable string
+	ColumnName   string
+	TableName    string
+}
+
+func indexCondition(counterCondition *int, filter []SimplifiedFilter) bool {
+	operation := 1
+	targetIndex := filter[0].Index
+	// previosuCondition := true
+
+	if len(filter) > 1 {
+		targetIndex = filter[1].Index
+		if *counterCondition == 0 {
+			*counterCondition = filter[0].Index - 1
+		}
+
+	} else if filter[0].Operator == "bigger_than" {
+		targetIndex = len(singletonIndex.btreeIndex[filter[0].TableName][filter[0].ColumnName]) - 1
+	} else if filter[0].Operator == ">=" {
+		targetIndex = len(singletonIndex.btreeIndex[filter[0].TableName][filter[0].ColumnName]) - 1
+	} else if filter[0].Operator == "equals" {
+		targetIndex = filter[0].Index
+		operation = filter[0].Index
+
+	} else {
+
+		targetIndex = 0
+		operation *= -1
+
+	}
+
+	if *counterCondition != targetIndex {
+		*counterCondition += operation
+	} else {
+		return false
+	}
+
+	return true
+}
+
+func GetBinaryIndex(value int, low int, high int, filter SimplifiedFilter) (int, bool) {
+
+	division := (low + high) / 2
+	// if division >= len(singletonIndex.btreeIndex[filter.TableName][filter.ColumnName]) {
+	// 	division = len(singletonIndex.btreeIndex[filter.TableName][filter.ColumnName]) - 1
+	// }
+	index := *singletonIndex.btreeIndex[filter.TableName][filter.ColumnName][division]
+
+	str := fmt.Sprintf("%v", index.Parsed_Document[filter.ColumnName])
+
+	intValue, _ := strconv.Atoi(str)
+
+	fmt.Println("VALUE::Binary")
+	fmt.Println(intValue)
+
+	if intValue > value {
+		if division > 0 {
+			indexPrevious := *singletonIndex.btreeIndex[filter.TableName][filter.ColumnName][division-1]
+			strPrev := fmt.Sprintf("%v", indexPrevious.Parsed_Document[filter.ColumnName])
+
+			prevIntValue, _ := strconv.Atoi(strPrev)
+			if prevIntValue < value {
+				if filter.Operator == "bigger_than" || filter.Operator == ">=" {
+					return division, false
+				} else if filter.Operator == "smaller_than" || filter.Operator == "<=" {
+					return division - 1, false
+				} else if filter.Operator == "equals" {
+					return -1, false
+				}
+			}
+		} else {
+			if filter.Operator == "bigger_than" || filter.Operator == ">=" {
+				return division, false
+			} else {
+				return -1, false
+			}
+		}
+
+		return GetBinaryIndex(value, low, division, filter)
+	} else if intValue < value {
+
+		if division < len(singletonIndex.btreeIndex[filter.TableName][filter.ColumnName])-1 {
+			indexPrevious := *singletonIndex.btreeIndex[filter.TableName][filter.ColumnName][division+1]
+			strPrev := fmt.Sprintf("%v", indexPrevious.Parsed_Document[filter.ColumnName])
+
+			prevIntValue, _ := strconv.Atoi(strPrev)
+			if prevIntValue > value {
+				if filter.Operator == "smaller_than" || filter.Operator == "<=" {
+					return division, false
+				} else if filter.Operator == "bigger_than" || filter.Operator == ">=" {
+					return division + 1, false
+				} else if filter.Operator == "equals" {
+					return -1, false
+				}
+			}
+		} else {
+			if filter.Operator == "smaller_than" || filter.Operator == "<=" {
+				return division, false
+			} else {
+				return -1, false
+			}
+		}
+
+		return GetBinaryIndex(value, division, high, filter)
+	} else if intValue == value {
+		return division, true
+	}
+
+	return -1, false
 }

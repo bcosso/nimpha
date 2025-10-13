@@ -1,22 +1,19 @@
 package main
 
-import (
-	// "bytes"
-	// "fmt"
-	// "log"
+import "fmt"
 
-	// "errors"
-	//"io"
-	"encoding/json"
-	// "strconv"
-	// "github.com/bcosso/rsocket_json_requests"
-)
+// "bytes"
+// "fmt"
+// "log"
+
+// "strconv"
+// "github.com/bcosso/rsocket_json_requests"
 
 func insertData(payload interface{}) interface{} {
 
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
-	json.Unmarshal([]byte(myString), &payload_content)
+	jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 
 	// ConsistencyStrategy := ""
 	// _, found := payload_content["connectionConfig"]
@@ -53,7 +50,7 @@ func insertDataJsonBody(payload interface{}) interface{} {
 
 	payload_content := make(map[string]interface{})
 	myString := payload.(string)
-	json.Unmarshal([]byte(myString), &payload_content)
+	jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
 	query := ""
 	operationType := ""
 
@@ -78,7 +75,7 @@ func insertDataJsonBody(payload interface{}) interface{} {
 	}
 
 	// mapResult := make(map[string]interface{})
-	// err := json.Unmarshal([]byte(payload_content["body"].(string)), &mapResult)
+	// err := jsonIterGlobal.Unmarshal([]byte(payload_content["body"].(string)), &mapResult)
 	// if err != nil {
 	// 	fmt.Println(err)
 	// }
@@ -86,6 +83,10 @@ func insertDataJsonBody(payload interface{}) interface{} {
 	intermediate_inteface := payload_content["body"].(map[string]interface{})
 	result.Parsed_Document = intermediate_inteface
 	coll = append(coll, result)
+
+	fmt.Println("---------------------------------------------------------------")
+	fmt.Println("gOT INTO insertDataJsonBody")
+	fmt.Println("---------------------------------------------------------------")
 	GetNextNodesToInsertAndWriteWal(&coll, query, operationType)
 
 	return "ok"
@@ -100,8 +101,21 @@ func insertWorker(payload interface{}) interface{} {
 
 func (sing *SingletonTable) InsertWorker(p mem_row) string {
 	pointerMemRow := &p
+	_, hasIndex := configs_file.Index[p.Table_name]
 	sing.mu.Lock()
 	sing.mt[p.Table_name] = append(sing.mt[p.Table_name], pointerMemRow)
+	if hasIndex {
+		for iIndex, _ := range configs_file.Index[p.Table_name] {
+			str := fmt.Sprintf("%v", p.Parsed_Document[configs_file.Index[p.Table_name][iIndex].ColumnName])
+
+			if configs_file.Index[p.Table_name][iIndex].IndexType == "HASH" {
+				singletonIndex.AttachNewHashIndexUnity(p.Table_name, configs_file.Index[p.Table_name][iIndex].ColumnName, str, pointerMemRow)
+			} else if configs_file.Index[p.Table_name][iIndex].IndexType == "BTREE" {
+				singletonIndex.AttachNewBtreeIndexUnity(p.Table_name, configs_file.Index[p.Table_name][iIndex].ColumnName, str, pointerMemRow)
+			}
+		}
+	}
+
 	sing.mu.Unlock()
 	return "Success"
 }

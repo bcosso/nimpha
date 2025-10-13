@@ -68,6 +68,7 @@ func removeIndex(s []mem_row, index int) []mem_row {
 
 func (sing *SingletonTable) DeleteWorker(filterLogic *Filter, ctx *map[string]interface{}) interface{} {
 	indexRow := 0
+
 	sing.mu.Lock()
 
 	for indexRow < len(sing.mt[filterLogic.TableObject[0].Name]) {
@@ -78,12 +79,75 @@ func (sing *SingletonTable) DeleteWorker(filterLogic *Filter, ctx *map[string]in
 			fmt.Println("----------------------------------------------------------------------------------")
 			fmt.Println("Found to delete")
 			fmt.Println("----------------------------------------------------------------------------------")
-
+			singletonIndex.DeleteWorkerIndex(filterLogic.TableObject[0].Name, sing.mt[filterLogic.TableObject[0].Name][indexRow].Parsed_Document)
+			fmt.Println(sing.mt[filterLogic.TableObject[0].Name][indexRow].Parsed_Document)
 			sing.mt[filterLogic.TableObject[0].Name] = slices.Delete(sing.mt[filterLogic.TableObject[0].Name], indexRow, indexRow+1)
+			fmt.Println(sing.mt[filterLogic.TableObject[0].Name])
+			//Check if the item possesses an Index
 			// sing.mu.Unlock()
 			indexRow--
 		}
 		indexRow++
+	}
+
+	sing.mu.Unlock()
+	return "Success"
+}
+
+func (sing *SingletonIndex) DeleteWorkerIndex(tableName string, row map[string]interface{}) interface{} {
+
+	sing.mu.Lock()
+
+	_, exists := singletonIndex.btreeIndex[tableName]
+	if exists {
+		for k, _ := range singletonIndex.btreeIndex[tableName] {
+			rows, rowExist := singletonIndex.btreeIndex[tableName][k]
+			if rowExist {
+				for i := range len(rows) {
+					if (*rows[i]).Parsed_Document[k] == row[k] {
+
+						fmt.Println("----------------------------------------------------------------------------------")
+						fmt.Println("Found to delete Index")
+						fmt.Println("----------------------------------------------------------------------------------")
+
+						singletonIndex.btreeIndex[tableName][k] = slices.Delete(singletonIndex.btreeIndex[tableName][k], i, i+1)
+					}
+				}
+			}
+		}
+
+	}
+
+	_, exists = singletonIndex.hashIndex[tableName]
+	if exists {
+		for k, _ := range singletonIndex.hashIndex[tableName] {
+			_, rowExist := singletonIndex.hashIndex[tableName][k]
+			if rowExist {
+				_, exists = singletonIndex.hashIndex[tableName][k]
+				if exists {
+					str := fmt.Sprintf("%v", row[k])
+					_, exists = singletonIndex.hashIndex[tableName][k][str]
+
+					fmt.Println("----------------------------------------------------------------------------------")
+					fmt.Println("FOUND INDEX!")
+					fmt.Println(str)
+					fmt.Println(row)
+					fmt.Println(k)
+					fmt.Println(singletonIndex.hashIndex[tableName])
+					fmt.Println(singletonIndex.hashIndex[tableName][k])
+
+					fmt.Println("----------------------------------------------------------------------------------")
+					if exists {
+						fmt.Println("----------------------------------------------------------------------------------")
+						fmt.Println("FOUND INDEX!!!!")
+						fmt.Println("----------------------------------------------------------------------------------")
+
+						delete(singletonIndex.hashIndex[tableName][k], str)
+					}
+				}
+
+			}
+		}
 	}
 
 	sing.mu.Unlock()
