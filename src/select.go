@@ -781,8 +781,8 @@ func checkForTablesInNodes(tables []SqlClause, filter Filter, ctx *map[string]in
 					}
 					//New receiving function
 					url := "/" + ir.Name + "/select_table"
-					_port, _ := strconv.Atoi(ir.Port)
-					rsocket_json_requests.RequestConfigs(ir.Ip, _port)
+					// _port, _ := strconv.Atoi(ir.Port)
+					// rsocket_json_requests.RequestConfigs(ir.Ip, _port)
 					CheckConnection(ir)
 					response, err := rsocket_json_requests.RequestJSONNew(url, jsonMap, ir.Name)
 
@@ -1309,12 +1309,6 @@ func (sing *SingletonTable) IsInMemTable(tableObject SqlClause, selectObject []S
 }
 
 func ManageQueryIndexes(filter Filter, ctx *map[string]interface{}) bool {
-	fmt.Println("000000000000000000000000000000000000000000000000000000000000000000000000000000000")
-	fmt.Println("Filter")
-	fmt.Println(filter.ChildFilters[2])
-	fmt.Println(filter.ChildFilters[2].ChildFilters[0].CommandLeft)
-	fmt.Println(reflect.TypeOf(filter.ChildFilters[2].ChildFilters[0].CommandLeft))
-	fmt.Println(len(filter.ChildFilters[2].ChildFilters))
 
 	_query := (*ctx)["_query"].((map[string][]mem_table_queries))
 	// var checkCommandTree sqlparserproject.CommandTree
