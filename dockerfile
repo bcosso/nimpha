@@ -35,8 +35,10 @@ RUN cp /app/np/np /app/nimpha/np
 
 # Create a script to run loadbalancer and nimpha
 WORKDIR /app
-RUN echo -e '#!/bin/bash \n ./loadbalancer/target/release/loadbalancer & cd nimpha && ./nimpha' > start.sh && chmod +x start.sh
 RUN cp /app/nimpha/configfile.json /app/configfile.json
+RUN cp /app/loadbalancer/target/release/loadbalancer /app/nimpha/lb
+RUN echo -e '#!/bin/bash \n cd nimpha && ./nimpha & sleep 5 && cd /app/nimpha && ./lb' > start.sh && chmod +x start.sh
 # Run the script
 ENTRYPOINT ["/app/start.sh"]
 EXPOSE 10000 8000 9090
+
