@@ -119,27 +119,3 @@ func (sing *SingletonTable) InsertWorker(p mem_row) string {
 	sing.mu.Unlock()
 	return "Success"
 }
-
-const _schemaTable = "__sys_table"
-const _columnTable = "table_name"
-
-func (sing *SingletonTable) CheckForSchema(table string, row *mem_row) {
-	var schemaRow mem_row
-	_, hasIndex := sing.mt[_schemaTable]
-	if hasIndex {
-		//Check for Identities
-		if _, hasIndex = singletonIndex.hashIndex[_schemaTable][_columnTable][table]; hasIndex {
-			schemaRow = *(singletonIndex.hashIndex[_schemaTable][_columnTable][table])
-
-			if identity, hasIdentity := schemaRow.Parsed_Document["_identity_value"]; hasIdentity {
-				newId := identity.(int)
-				newId++
-				identityColumn, _ := schemaRow.Parsed_Document["_identity_column"]
-				row.Parsed_Document[identityColumn.(string)] = newId
-			}
-		}
-		//Check for columns needed
-		//
-
-	}
-}
