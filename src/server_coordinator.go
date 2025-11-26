@@ -239,6 +239,7 @@ func handleRequestsRsocket(configs *config) {
 	// rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/delete_data_where_worker_contains", delete_data_where_worker_contains_rsocket)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_table", selectTable)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_query", executeQuery)
+	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_schema_command", executeSchemaCommand)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/execute_procedure", executeLastQuery)
 	rsocket_json_requests.AppendFunctionHandler("/"+configs.Instance_name+"/select_data_where_worker_equals_rsocket", selectDataWhereWorkerEquals)
 
@@ -663,6 +664,7 @@ func (sing *SingletonTable) UnmarshalMT(fileData []byte) {
 
 		sing.mt[table] = newRows
 	}
+	sing.InitializeSchema()
 }
 
 func (sing *SingletonWal) AddItemWAL(guid string, nodesSuccessful []peers) {
