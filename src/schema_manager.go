@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/bcosso/sqlparserproject"
 )
 
 const _schemaTable = "__sys_table"
@@ -21,10 +23,10 @@ func (sing *SingletonTable) InitializeSchema() {
 }
 
 type Schema struct {
-	TableName      string
-	Column         map[string]interface{}
-	Identity       bool
-	ColumnIdentity string
+	TableName        string
+	ColumnDefinition map[string]interface{}
+	Identity         bool
+	ColumnIdentity   string
 }
 
 func (sing *SingletonTable) CreateSchema(schema Schema) {
@@ -47,6 +49,15 @@ func (sing *SingletonTable) CreateSchema(schema Schema) {
 				identity = 1
 				rowSchema.Parsed_Document["_identity_value"] = identity
 				rowSchema.Parsed_Document["_identity_column"] = schema.ColumnIdentity
+			}
+			if schema.ColumnDefinition != nil {
+
+				var columnDefinition map[string]interface{}
+				for k, v := range schema.ColumnDefinition {
+					columnDefinition[k] = v
+				}
+				rowSchema.Parsed_Document["_column_definition"] = columnDefinition
+
 			}
 			fmt.Println(rowSchema)
 			//rowSchema.Parsed_Document = schema
@@ -77,7 +88,7 @@ func (sing *SingletonTable) CreateSchema(schema Schema) {
 
 }
 
-func (sing *SingletonTable) CheckForSchema(table string, row *mem_row) {
+func (sing *SingletonTable) CheckForSchema(table string, row *mem_row) error {
 	var schemaRow mem_row
 	_, hasIndex := sing.mt[_schemaTable]
 	if hasIndex {
@@ -94,10 +105,25 @@ func (sing *SingletonTable) CheckForSchema(table string, row *mem_row) {
 				newId++
 				schemaRow.Parsed_Document["_identity_value"] = newId
 			}
+
+			if _, hasColumnSchema := schemaRow.Parsed_Document["_column_definition"]; hasColumnSchema {
+				//strId := identity.(json.Number).String()
+				//newId, _ := strconv.Atoi(strId)
+				rowDereferenced := *row
+				if rowDereferenced.Parsed_Document["_column_definition"] != nil {
+					columnDefinition := rowDereferenced.Parsed_Document["_column_definition"].(map[string]interface{})
+					for k, _ := range columnDefinition {
+						//Check if the insert has a column that is not in the defined schema
+						if _, hasColumn := columnDefinition[k]; !hasColumn {
+							//return error
+						}
+					}
+				}
+			}
 		}
-		//Check for columns needed
-		//
 	}
+
+	return nil
 }
 
 func executeSchemaCommand(payload interface{}) interface{} {
@@ -111,14 +137,37 @@ func executeSchemaCommand(payload interface{}) interface{} {
 	//tree := sqlparserproject.ExecuteParsingProcess(query)
 	//filterNew2 := new(Filter)
 
-	query := payload_content["query"].(map[string]interface{})
+	query := payload_content["query"].(string)
+	tree := sqlparserproject.ExecuteParsingProcess(query)
 	var schema Schema
+	evaluateDDLTree(tree, &schema)
 
-	schema.TableName = query["table_name"].(string)
+	//schema.TableName = query["table_name"].(string)
 
-	schema.ColumnIdentity = query["column_identity"].(string)
+	//if _, hasIdentity := query["column_identity"]; hasIdentity {
+	//	schema.ColumnIdentity = query["column_identity"].(string)
+	//}
+
+	//if _, hasDefinition := query["column_definition"]; hasDefinition {
+	//	schema.ColumnDefinition = query["column_definition"].(map[string]interface{})
+	//}
+
 	fmt.Println(schema)
-	singletonTable.CreateSchema(schema)
+	//singletonTable.CreateSchema(schema)
 
 	return "Ok"
+}
+
+func evaluateDDLTree(tree sqlparserproject.CommandTree, schema *Schema) {
+	fmt.Println("88888888888888888888888888888888")
+	fmt.Println(tree)
+	switch tree.TypeToken {
+	case "create":
+	case "table":
+	case "column":
+	default:
+		fmt.Println("")
+
+	}
+
 }
