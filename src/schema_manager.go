@@ -164,7 +164,15 @@ func evaluateDDLTree(tree sqlparserproject.CommandTree, schema *Schema) {
 	switch tree.TypeToken {
 	case "create":
 	case "table":
-	case "column":
+		schema.TableName = tree.ClauseName
+	case "string":
+		fallthrough
+	case "int":
+		schema.ColumnDefinition[tree.ClauseName] = tree.TypeToken
+	case "columns":
+		for _, branch := range tree.CommandParts {
+			evaluateDDLTree(branch, schema)
+		}
 	default:
 		fmt.Println("")
 
