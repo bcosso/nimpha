@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/bcosso/sqlparserproject"
 )
@@ -159,21 +160,38 @@ func executeSchemaCommand(payload interface{}) interface{} {
 }
 
 func evaluateDDLTree(tree sqlparserproject.CommandTree, schema *Schema) {
-	fmt.Println("88888888888888888888888888888888")
-	fmt.Println(tree)
-	switch tree.TypeToken {
-	case "create":
+	switch strings.ToLower(tree.TypeToken) {
+	//case "create":
 	case "table":
 		schema.TableName = tree.ClauseName
+		if len(tree.CommandParts) > 0 {
+			for _, branch := range tree.CommandParts {
+				evaluateDDLTree(branch, schema)
+			}
+		}
 	case "string":
 		fallthrough
 	case "int":
-		schema.ColumnDefinition[tree.ClauseName] = tree.TypeToken
-	case "columns":
-		for _, branch := range tree.CommandParts {
-			evaluateDDLTree(branch, schema)
+		//if _, initialized := schema.ColumnDefinition; !initialized{
+		if schema.ColumnDefinition == nil {
+			schema.ColumnDefinition = make(map[string]interface{})
 		}
+		schema.ColumnDefinition[tree.ClauseName] = tree.TypeToken
+		if len(tree.ExtraArguments) > 0 && strings.ToLower(tree.TypeToken) == "int" {
+			if strings.ToLower(tree.ExtraArguments[0]) == "identity" {
+				schema.ColumnIdentity = tree.ClauseName
+				schema.Identity = true
+			}
+		}
+
+	case "columns":
+		fallthrough
 	default:
+		if len(tree.CommandParts) > 0 {
+			for _, branch := range tree.CommandParts {
+				evaluateDDLTree(branch, schema)
+			}
+		}
 		fmt.Println("")
 
 	}
