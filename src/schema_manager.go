@@ -53,7 +53,9 @@ func (sing *SingletonTable) CreateSchema(schema Schema) {
 			}
 			if schema.ColumnDefinition != nil {
 
-				var columnDefinition map[string]interface{}
+				//var columnDefinition map[string]interface{}
+				columnDefinition := make(map[string]interface{})
+
 				for k, v := range schema.ColumnDefinition {
 					columnDefinition[k] = v
 				}
@@ -154,7 +156,7 @@ func executeSchemaCommand(payload interface{}) interface{} {
 	//}
 
 	fmt.Println(schema)
-	//singletonTable.CreateSchema(schema)
+	singletonTable.CreateSchema(schema)
 
 	return "Ok"
 }
