@@ -104,6 +104,7 @@ func (sing *SingletonTable) InsertWorker(p mem_row) string {
 	_, hasIndex := configs_file.Index[p.Table_name]
 	sing.mu.Lock()
 	if err := sing.CheckForSchema(p.Table_name, pointerMemRow); err != nil {
+		sing.mu.Unlock()
 		return err.Error()
 	}
 
