@@ -103,7 +103,10 @@ func (sing *SingletonTable) InsertWorker(p mem_row) string {
 	pointerMemRow := &p
 	_, hasIndex := configs_file.Index[p.Table_name]
 	sing.mu.Lock()
-	sing.CheckForSchema(p.Table_name, pointerMemRow)
+	if err := sing.CheckForSchema(p.Table_name, pointerMemRow); err != nil {
+		return err.Error()
+	}
+
 	fmt.Println("999999999999999999999999999999999")
 
 	fmt.Println(*pointerMemRow)

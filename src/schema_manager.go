@@ -110,15 +110,20 @@ func (sing *SingletonTable) CheckForSchema(table string, row *mem_row) error {
 			}
 
 			if _, hasColumnSchema := schemaRow.Parsed_Document["_column_definition"]; hasColumnSchema {
+
 				//strId := identity.(json.Number).String()
 				//newId, _ := strconv.Atoi(strId)
 				rowDereferenced := *row
-				if rowDereferenced.Parsed_Document["_column_definition"] != nil {
-					columnDefinition := rowDereferenced.Parsed_Document["_column_definition"].(map[string]interface{})
+				if schemaRow.Parsed_Document["_column_definition"] != nil {
+					fmt.Println("0000000000000000000000000000000000000000000000000000")
+					fmt.Println("Has columnDefinition")
+					columnDefinition := schemaRow.Parsed_Document["_column_definition"].(map[string]interface{})
 					for k, _ := range columnDefinition {
+
 						//Check if the insert has a column that is not in the defined schema
-						if _, hasColumn := columnDefinition[k]; !hasColumn {
-							//return error
+						if _, hasColumn := rowDereferenced.Parsed_Document[k]; !hasColumn {
+							err := fmt.Errorf("invalid column name: %s", k)
+							return err
 						}
 					}
 				}
