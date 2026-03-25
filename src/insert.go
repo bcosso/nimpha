@@ -92,6 +92,35 @@ func insertDataJsonBody(payload interface{}) interface{} {
 	return "ok"
 }
 
+func insertEndPoint(payload interface{}) interface{} {
+	payload_content := make(map[string]interface{})
+	myString := payload.(string)
+	jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
+	query := ""
+	operationType := "insert"
+
+	var result mem_row
+	var coll []mem_row
+	// result.Key_id = ikey_id
+	result.Table_name = payload_content["table"].(string)
+	_, hasQuery := payload_content["query_sql"]
+	if hasQuery {
+		query = payload_content["query_sql"].(string)
+		operationType = payload_content["operation_type"].(string)
+	}
+
+	intermediate_inteface := payload_content["body"].(map[string]interface{})
+	result.Parsed_Document = intermediate_inteface
+	coll = append(coll, result)
+
+	fmt.Println("---------------------------------------------------------------")
+	fmt.Println("gOT INTO insertDataJsonBody")
+	fmt.Println("---------------------------------------------------------------")
+	GetNextNodesToInsertAndWriteWal(&coll, query, operationType)
+
+	return "ok"
+}
+
 func insertWorker(payload interface{}) interface{} {
 
 	p, _ := GetParsedDocumentToMemRow(payload)
