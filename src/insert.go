@@ -12,8 +12,18 @@ import "fmt"
 func insertData(payload interface{}) interface{} {
 
 	payload_content := make(map[string]interface{})
-	myString := payload.(string)
-	jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
+
+	switch payload.(type) {
+	case map[string]interface{}:
+		payload_content = payload.(map[string]interface{})
+
+	case string:
+		myString := payload.(string)
+		jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
+
+	default:
+		return "Unknown payload type"
+	}
 
 	// ConsistencyStrategy := ""
 	// _, found := payload_content["connectionConfig"]
@@ -49,8 +59,19 @@ func insertData(payload interface{}) interface{} {
 func insertDataJsonBody(payload interface{}) interface{} {
 
 	payload_content := make(map[string]interface{})
-	myString := payload.(string)
-	jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
+
+	switch payload.(type) {
+	case map[string]interface{}:
+		payload_content = payload.(map[string]interface{})
+
+	case string:
+		myString := payload.(string)
+		jsonIterGlobal.Unmarshal([]byte(myString), &payload_content)
+
+	default:
+		return "Unknown payload type"
+	}
+
 	query := ""
 	operationType := ""
 
@@ -85,7 +106,7 @@ func insertDataJsonBody(payload interface{}) interface{} {
 	coll = append(coll, result)
 
 	fmt.Println("---------------------------------------------------------------")
-	fmt.Println("gOT INTO insertDataJsonBody")
+	fmt.Println("insertDataJsonBody")
 	fmt.Println("---------------------------------------------------------------")
 	GetNextNodesToInsertAndWriteWal(&coll, query, operationType)
 
@@ -114,7 +135,7 @@ func insertEndPoint(payload interface{}) interface{} {
 	coll = append(coll, result)
 
 	fmt.Println("---------------------------------------------------------------")
-	fmt.Println("gOT INTO insertDataJsonBody")
+	fmt.Println("insertEndPoint")
 	fmt.Println("---------------------------------------------------------------")
 	GetNextNodesToInsertAndWriteWal(&coll, query, operationType)
 
@@ -136,8 +157,6 @@ func (sing *SingletonTable) InsertWorker(p mem_row) string {
 		sing.mu.Unlock()
 		return err.Error()
 	}
-
-	fmt.Println("999999999999999999999999999999999")
 
 	fmt.Println(*pointerMemRow)
 	sing.mt[p.Table_name] = append(sing.mt[p.Table_name], pointerMemRow)

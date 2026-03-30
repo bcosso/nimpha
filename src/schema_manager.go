@@ -44,7 +44,7 @@ func (sing *SingletonTable) CreateSchema(schema Schema) {
 			rowSchema.Table_name = _schemaTable
 			rowSchema.Parsed_Document = make(map[string]interface{})
 			rowSchema.Parsed_Document[_columnTable] = schema.TableName
-			fmt.Println("Populating rowSchema")
+
 			if schema.ColumnIdentity != "" {
 				var identity int
 				identity = 1
@@ -115,8 +115,7 @@ func (sing *SingletonTable) CheckForSchema(table string, row *mem_row) error {
 				//newId, _ := strconv.Atoi(strId)
 				rowDereferenced := *row
 				if schemaRow.Parsed_Document["_column_definition"] != nil {
-					fmt.Println("0000000000000000000000000000000000000000000000000000")
-					fmt.Println("Has columnDefinition")
+
 					columnDefinition := schemaRow.Parsed_Document["_column_definition"].(map[string]interface{})
 					for k, _ := range columnDefinition {
 
@@ -139,7 +138,7 @@ func executeSchemaCommand(payload interface{}) interface{} {
 	if !ok {
 		fmt.Println("ERROR!")
 	}
-	fmt.Println("Method reached")
+
 	//Will get a new Parser method for DDL-Like commands
 	//query := payload_content["query"].(string)
 	//tree := sqlparserproject.ExecuteParsingProcess(query)
