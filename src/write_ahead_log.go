@@ -371,6 +371,11 @@ func UpdateWal(payload interface{}) interface{} {
 		//call execute_query locally instead with the query
 		executeQueryDelete(wo.Query)
 		// deleteWorkerOld(string(jsonParam))
+	} else if wo.Operation_type == "update" {
+		fmt.Println("--------------update operation-------------------")
+		//call execute_query locally instead with the query
+		executeQueryDelete(wo.Query)
+
 	} else {
 		insertWorker(string(jsonParam))
 	}

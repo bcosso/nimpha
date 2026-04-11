@@ -79,6 +79,7 @@ func executeLastQuery(payload interface{}) interface{} {
 func executeQueryDelete(query string) interface{} {
 	tree := sqlparserproject.ExecuteParsingProcess(query)
 	filterNew := new(Filter)
+	fmt.Println(tree)
 	determineQueryType(tree, filterNew, query, "wal")
 
 	return "Ok"
@@ -126,17 +127,45 @@ func determineQueryType(tree sqlparserproject.CommandTree, filter *Filter, query
 			} else {
 				resultParse := "{}"
 				fmt.Println("---------------------------------------------------------------")
-				fmt.Println("Parsed Json for insert")
+				fmt.Println("Parsed Json for delete")
 				fmt.Println("---------------------------------------------------------------")
 				fmt.Println(resultParse)
 
 				insertFromJson(tableObject[0].Name, resultParse, query, "delete")
 			}
-		case "into_command":
-			determineQueryType(leaf, filter, query, "")
+
 		case "update":
 			determineQueryType(leaf, filter, query, "")
+			tableObject := filter.TableObject
+
+			if caller == "wal" {
+				ctx := make(map[string]interface{})
+				ctx["_query_sql"] = query
+				ctx["_query"] = query
+				fmt.Println("----------------------------------------------------------------------------------")
+				fmt.Println("Got into update Worker")
+				fmt.Println(filter)
+				fmt.Println("----------------------------------------------------------------------------------")
+				_analyzedFilterList := make(map[string]int)
+				ctx["_analyzedFilterList"] = _analyzedFilterList
+				singletonTable.UpdateWorker(filter, &ctx)
+			} else {
+				resultParse := "{}"
+				fmt.Println("---------------------------------------------------------------")
+				fmt.Println("Parsed Json for update")
+				fmt.Println("---------------------------------------------------------------")
+				fmt.Println(filter)
+
+				insertFromJson(tableObject[0].Name, resultParse, query, "update")
+			}
+
+		case "into_command":
+			determineQueryType(leaf, filter, query, "")
+		case "update_table":
+			determineQueryType(leaf, filter, query, "")
 		case "set":
+			fallthrough
+		case "fields_update":
 			fallthrough
 		case "into":
 			determineQueryType(leaf, filter, query, "")
