@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
+
+	"github.com/bcosso/sqlparserproject"
 )
 
 //func removeIndex(s []mem_row, index int) []mem_row {
@@ -73,7 +76,8 @@ func (sing *SingletonTable) UpdateWorker(filterLogic *Filter, ctx *map[string]in
 	fmt.Println(filterLogic)
 	fmt.Println(filterLogic.TableObject[0].Name)
 	fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-	return ""
+	//return ""
+	var treeReference sqlparserproject.CommandTree
 
 	sing.mu.Lock()
 
@@ -83,15 +87,31 @@ func (sing *SingletonTable) UpdateWorker(filterLogic *Filter, ctx *map[string]in
 		if evaluateLogic(mem_table_query, filterLogic, ctx) {
 			// sing.mu.Lock()
 			fmt.Println("----------------------------------------------------------------------------------")
-			fmt.Println("Found to delete")
+			fmt.Println("Found to update")
 			fmt.Println("----------------------------------------------------------------------------------")
-			singletonIndex.DeleteWorkerIndex(filterLogic.TableObject[0].Name, sing.mt[filterLogic.TableObject[0].Name][indexRow].Parsed_Document)
+
+			fmt.Println(filterLogic.ChildFilters)
+			fmt.Println("----------------------------------------------------------------------------------")
+			fmt.Println(filterLogic.SelectClause)
+
+			for _, cFilter := range filterLogic.ChildFilters {
+				fmt.Println("1111111111111111")
+				fmt.Println(cFilter.CommandLeft)
+				if reflect.TypeOf(cFilter.CommandLeft) == reflect.TypeOf(treeReference) {
+					leaf := cFilter.CommandLeft.(sqlparserproject.CommandTree)
+					sing.mt[filterLogic.TableObject[0].Name][indexRow].Parsed_Document[leaf.Clause] = cFilter.CommandRight
+
+				}
+
+			}
+
+			//singletonIndex.DeleteWorkerIndex(filterLogic.TableObject[0].Name, sing.mt[filterLogic.TableObject[0].Name][indexRow].Parsed_Document)
 			fmt.Println(sing.mt[filterLogic.TableObject[0].Name][indexRow].Parsed_Document)
-			sing.mt[filterLogic.TableObject[0].Name] = slices.Delete(sing.mt[filterLogic.TableObject[0].Name], indexRow, indexRow+1)
+			//sing.mt[filterLogic.TableObject[0].Name] = slices.Delete(sing.mt[filterLogic.TableObject[0].Name], indexRow, indexRow+1)
 			fmt.Println(sing.mt[filterLogic.TableObject[0].Name])
 			//Check if the item possesses an Index
 			// sing.mu.Unlock()
-			indexRow--
+			//indexRow--
 		}
 		indexRow++
 	}
