@@ -90,16 +90,16 @@ func (sing *SingletonTable) UpdateWorker(filterLogic *Filter, ctx *map[string]in
 			fmt.Println("Found to update")
 			fmt.Println("----------------------------------------------------------------------------------")
 
-			fmt.Println(filterLogic.ChildFilters)
-			fmt.Println("----------------------------------------------------------------------------------")
-			fmt.Println(filterLogic.SelectClause)
+			//Need to make it ACID and work with indexes..
 
 			for _, cFilter := range filterLogic.ChildFilters {
-				fmt.Println("1111111111111111")
-				fmt.Println(cFilter.CommandLeft)
+
 				if reflect.TypeOf(cFilter.CommandLeft) == reflect.TypeOf(treeReference) {
 					leaf := cFilter.CommandLeft.(sqlparserproject.CommandTree)
-					sing.mt[filterLogic.TableObject[0].Name][indexRow].Parsed_Document[leaf.Clause] = cFilter.CommandRight
+					if leaf.TypeToken == "FIELD" {
+
+						sing.mt[filterLogic.TableObject[0].Name][indexRow].Parsed_Document[leaf.Clause] = cFilter.CommandRight
+					}
 
 				}
 
